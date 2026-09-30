@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>스플 | 스터디 플래너</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <main class="page">
+      <header class="page-header">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">✓</span>
+          <div>
+            <p class="eyebrow">STUDY PLANNER</p>
+            <h1>스플 <span>스터디 플래너</span></h1>
+          </div>
+        </div>
+        <nav class="quick-nav" aria-label="빠른 이동">
+          <a href="#calendar-heading">달력</a>
+          <a href="#task-form">일정 입력</a>
+          <a href="#list-heading">내 일정</a>
+        </nav>
+      </header>
+
+      <p id="storage-message" class="notice notice-error" role="alert" hidden></p>
+
+      <section class="calendar-section" aria-labelledby="calendar-heading">
+        <div class="calendar-toolbar">
+          <div>
+            <p class="calendar-kicker">MONTHLY VIEW</p>
+            <h2 id="calendar-heading"><span id="calendar-month" aria-live="polite"></span></h2>
+          </div>
+          <div class="calendar-controls" aria-label="달력 이동">
+            <button id="previous-month" class="icon-button" type="button" aria-label="이전 달">‹</button>
+            <button id="today-button" class="today-button" type="button">오늘</button>
+            <button id="next-month" class="icon-button" type="button" aria-label="다음 달">›</button>
+          </div>
+        </div>
+        <div class="calendar-scroll">
+          <div class="calendar-inner">
+            <div class="calendar-weekdays" aria-hidden="true">
+              <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+            </div>
+            <div id="calendar-grid" class="calendar-grid" role="grid" aria-label="월간 일정 달력"></div>
+          </div>
+        </div>
+        <p class="calendar-tip">날짜를 누르면 그날의 일정을 추가할 수 있습니다. 일정 카드를 누르면 수정 화면이 열립니다.</p>
+      </section>
+
+      <section class="panel alert-panel" aria-labelledby="alerts-heading">
+        <div class="section-heading alert-heading">
+          <div>
+            <h2 id="alerts-heading">마감 알림</h2>
+            <p id="alert-summary" aria-live="polite">마감이 가까운 일정을 확인하고 있어요.</p>
+          </div>
+          <button id="notification-button" class="secondary-button" type="button">브라우저 알림 켜기</button>
+        </div>
+        <p id="notification-status" class="helper-text">화면 알림은 브라우저 권한 없이도 표시됩니다.</p>
+        <ul id="alert-list" class="alert-list" aria-live="polite"></ul>
+      </section>
+
+      <section class="panel" aria-labelledby="form-heading">
+        <div class="section-heading">
+          <h2 id="form-heading">할 일 추가</h2>
+          <p>제목과 마감 날짜를 입력해 주세요.</p>
+        </div>
+        <form id="task-form" novalidate>
+          <div class="form-grid">
+            <label class="field field-title">
+              <span>제목</span>
+              <input id="task-title" name="title" type="text" maxlength="100" placeholder="예: 영어 단어 30개 외우기" autocomplete="off" required />
+            </label>
+            <label class="field">
+              <span>마감 날짜</span>
+              <input id="task-due" name="due" type="date" required />
+            </label>
+            <label class="field">
+              <span>알림 기준</span>
+              <select id="task-reminder" name="reminder">
+                <option value="1" selected>1일 전</option>
+                <option value="3">3일 전</option>
+                <option value="7">7일 전</option>
+              </select>
+            </label>
+          </div>
+          <p id="form-message" class="form-message" role="alert" aria-live="polite"></p>
+          <div class="form-actions">
+            <button id="submit-button" class="primary-button" type="submit">일정 추가</button>
+            <button id="cancel-button" class="secondary-button" type="button" hidden>수정 취소</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel" aria-labelledby="list-heading">
+        <div class="section-heading list-heading">
+          <div>
+            <h2 id="list-heading">내 일정</h2>
+            <p id="task-count" aria-live="polite">0개 일정</p>
+          </div>
+        </div>
+        <div class="list-tools">
+          <label class="field">
+            <span>상태</span>
+            <select id="status-filter">
+              <option value="all">전체</option>
+              <option value="active">진행 중</option>
+              <option value="completed">완료</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>제목 검색</span>
+            <input id="search-input" type="search" placeholder="찾을 일정 입력" />
+          </label>
+        </div>
+        <p id="empty-state" class="empty-state">등록된 일정이 없어요. 첫 할 일을 추가해 보세요.</p>
+        <ul id="task-list" class="task-list" aria-label="등록된 일정"></ul>
+      </section>
+    </main>
+  </body>
+</html>
