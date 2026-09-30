@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>스플 발표 | 스터디 플래너</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+        color: #202d3c;
+        background: #eef2f5;
+      }
+
+      * { box-sizing: border-box; }
+      body { margin: 0; }
+      button, a { font: inherit; }
+
+      .slide {
+        display: none;
+        position: relative;
+        width: min(100vw, 177.78vh);
+        min-height: min(100vh, 56.25vw);
+        margin: 0 auto;
+        padding: clamp(32px, 5vw, 88px);
+        background: #fff;
+        overflow: hidden;
+      }
+
+      .slide.is-active { display: flex; flex-direction: column; justify-content: center; }
+      .slide-number { position: absolute; top: clamp(24px, 3.2vw, 54px); right: clamp(32px, 5vw, 88px); color: #8995a0; font-size: clamp(13px, 1vw, 18px); letter-spacing: 0.1em; }
+      .eyebrow { margin: 0 0 18px; color: #5b7c65; font-size: clamp(13px, 1.1vw, 18px); font-weight: 800; letter-spacing: 0.16em; }
+      h1, h2, h3, p { margin-top: 0; }
+      h1 { margin-bottom: 22px; font-size: clamp(58px, 7.5vw, 126px); line-height: 1.04; letter-spacing: -0.07em; }
+      h2 { margin-bottom: 28px; font-size: clamp(36px, 4vw, 68px); line-height: 1.14; letter-spacing: -0.05em; }
+      h3 { margin-bottom: 10px; font-size: clamp(22px, 2vw, 34px); }
+      .lead { max-width: 900px; margin-bottom: 0; color: #5e6d7a; font-size: clamp(22px, 2.2vw, 38px); line-height: 1.55; word-break: keep-all; }
+      .muted { color: #657382; }
+      .accent { color: #3c7550; }
+      .rule { width: 84px; height: 6px; margin: 8px 0 30px; border-radius: 6px; background: #9dc6a6; }
+
+      .cover { background: linear-gradient(145deg, #fff 52%, #e8f3eb 100%); }
+      .cover .lead { max-width: 750px; }
+      .cover-mark { display: grid; place-items: center; width: clamp(66px, 7vw, 112px); height: clamp(66px, 7vw, 112px); margin-bottom: 28px; border-radius: 24%; background: #dcebdd; color: #397745; font-size: clamp(40px, 4.5vw, 74px); font-weight: 900; }
+      .cover-foot { margin-top: 52px; color: #6e7b87; font-size: clamp(15px, 1.25vw, 21px); }
+
+      .statement { max-width: 1080px; font-size: clamp(29px, 3.15vw, 54px); font-weight: 700; line-height: 1.48; letter-spacing: -0.045em; word-break: keep-all; }
+      .statement-secondary { max-width: 1040px; margin-top: 22px; color: #5c6b78; font-size: clamp(20px, 2vw, 34px); line-height: 1.55; word-break: keep-all; }
+
+      .image-slide { justify-content: flex-start !important; }
+      .image-slide h2 { margin-bottom: 12px; }
+      .image-slide .slide-copy { margin-bottom: 20px; color: #657382; font-size: clamp(17px, 1.4vw, 24px); }
+      .screenshot {
+        display: block;
+        max-width: 100%;
+        max-height: min(61vh, 650px);
+        margin: 0 auto;
+        border: 1px solid #dbe2e7;
+        border-radius: 10px;
+        box-shadow: 0 16px 42px rgb(31 53 75 / 12%);
+        object-fit: contain;
+      }
+
+      .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(18px, 2.5vw, 44px); margin-top: 28px; padding: 0; list-style: none; }
+      .flow li { padding-top: 18px; border-top: 4px solid #d8e8dc; }
+      .flow strong { display: block; margin-bottom: 18px; color: #559064; font-size: clamp(25px, 2.8vw, 46px); }
+      .flow span { display: block; font-size: clamp(19px, 1.8vw, 30px); font-weight: 700; line-height: 1.45; word-break: keep-all; }
+      .flow small { display: block; margin-top: 10px; color: #687785; font-size: clamp(15px, 1.1vw, 20px); line-height: 1.45; word-break: keep-all; }
+
+      .file-list { margin: 18px 0 0; padding: 0; list-style: none; }
+      .file-list li { display: grid; grid-template-columns: minmax(210px, 0.9fr) 2fr; gap: 28px; padding: 22px 0; border-top: 1px solid #dbe3e8; font-size: clamp(19px, 1.7vw, 30px); }
+      .file-list code { color: #3c7550; font-size: 0.9em; font-weight: 700; }
+      .file-list span { color: #526373; }
+      .note { max-width: 1000px; margin-top: 36px; color: #667584; font-size: clamp(16px, 1.25vw, 22px); line-height: 1.5; }
+
+      .demo-list { margin: 15px 0 0; padding-left: 1.45em; font-size: clamp(22px, 2.05vw, 36px); line-height: 1.8; }
+      .demo-list li { padding-left: 0.24em; }
+      .demo-list li::marker { color: #559064; font-weight: 800; }
+      .link-row { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 34px; }
+      .link-row a { color: #3268bb; font-size: clamp(17px, 1.3vw, 23px); text-decoration: underline; text-underline-offset: 4px; }
+
+      .controls { position: fixed; right: 24px; bottom: 20px; z-index: 10; display: flex; align-items: center; gap: 8px; padding: 8px; border: 1px solid #d8e1e7; border-radius: 12px; background: rgb(255 255 255 / 95%); box-shadow: 0 7px 25px rgb(26 42 60 / 12%); }
+      .controls button { min-width: 66px; padding: 8px 10px; border: 0; border-radius: 8px; background: #edf3ef; color: #285b37; cursor: pointer; }
+      .controls button:hover:not(:disabled) { background: #dcebdd; }
+      .controls button:disabled { opacity: 0.35; cursor: default; }
+      .controls output { min-width: 52px; text-align: center; color: #596776; font-size: 0.9rem; }
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+      @media (max-width: 760px) {
+        .slide { width: 100%; min-height: 100dvh; padding: 68px 25px 100px; }
+        .slide-number { top: 20px; right: 25px; }
+        .flow { grid-template-columns: repeat(2, 1fr); }
+        .file-list li { grid-template-columns: 1fr; gap: 4px; }
+        .screenshot { max-height: 50vh; }
+        .controls { right: 10px; bottom: 10px; }
+      }
+
+      @media print {
+        @page { size: 16in 9in; margin: 0; }
+        :root { background: #fff; }
+        .slide, .slide.is-active { display: flex !important; width: 16in; height: 9in; min-height: 0; break-after: page; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        .controls { display: none; }
+      }
+    </style>
+    <script defer>
+      document.addEventListener("DOMContentLoaded", () => {
+        const slides = [...document.querySelectorAll(".slide")];
+        const previous = document.querySelector("#previous-slide");
+        const next = document.querySelector("#next-slide");
+        const counter = document.querySelector("#slide-counter");
+        let current = 0;
+
+        function showSlide(index) {
+          current = Math.max(0, Math.min(index, slides.length - 1));
+          slides.forEach((slide, position) => {
+            const active = position === current;
+            slide.classList.toggle("is-active", active);
+            slide.setAttribute("aria-hidden", String(!active));
+          });
+          previous.disabled = current === 0;
+          next.disabled = current === slides.length - 1;
+          counter.value = `${current + 1} / ${slides.length}`;
+          document.title = `스플 발표 (${current + 1}/${slides.length})`;
+        }
+
+        previous.addEventListener("click", () => showSlide(current - 1));
+        next.addEventListener("click", () => showSlide(current + 1));
+        document.addEventListener("keydown", (event) => {
+          if (["ArrowRight", "PageDown", " "].includes(event.key)) {
+            event.preventDefault();
+            showSlide(current + 1);
+          } else if (["ArrowLeft", "PageUp"].includes(event.key)) {
+            event.preventDefault();
+            showSlide(current - 1);
+          } else if (event.key === "Home") {
+            showSlide(0);
+          } else if (event.key === "End") {
+            showSlide(slides.length - 1);
+          }
+        });
+        showSlide(0);
+      });
+    </script>
+  </head>
+  <body>
+    <main aria-label="스플 발표 자료">
+      <section class="slide cover is-active" aria-labelledby="title-1">
+        <span class="slide-number">01</span>
+        <div class="cover-mark" aria-hidden="true">✓</div>
+        <p class="eyebrow">STUDY PLANNER</p>
+        <h1 id="title-1">스플</h1>
+        <p class="lead">학습할 일을 날짜에 맞춰 기록하고 마감 전에 확인하는 개인용 웹앱</p>
+        <p class="cover-foot">월간 달력 · 일정 관리 · 마감 알림</p>
+      </section>
+
+      <section class="slide" aria-labelledby="title-2" aria-hidden="true">
+        <span class="slide-number">02</span>
+        <p class="eyebrow">PROBLEM</p>
+        <h2 id="title-2">왜 만들었나</h2>
+        <div class="rule" aria-hidden="true"></div>
+        <p class="statement">해야 할 일을 적어 두어도, <span class="accent">마감이 가까워진 뒤에야</span> 알아차릴 때가 있습니다.</p>
+        <p class="statement-secondary">스플은 할 일과 마감 날짜를 달력에서 보여 주고, 남은 일수에 따라 경고를 표시합니다.</p>
+      </section>
+
+      <section class="slide image-slide" aria-labelledby="title-3" aria-hidden="true">
+        <span class="slide-number">03</span>
+        <p class="eyebrow">SCREEN 01</p>
+        <h2 id="title-3">월간 달력</h2>
+        <p class="slide-copy">날짜별 일정 카드를 보고, 이전 달·오늘·다음 달로 이동합니다.</p>
+        <img class="screenshot" src="docs/images/calendar-overview.png" alt="스플의 2026년 9월 월간 달력 화면. 요일과 날짜가 격자로 배열되어 있다." />
+      </section>
+
+      <section class="slide image-slide" aria-labelledby="title-4" aria-hidden="true">
+        <span class="slide-number">04</span>
+        <p class="eyebrow">SCREEN 02</p>
+        <h2 id="title-4">일정 입력과 확인</h2>
+        <p class="slide-copy">제목·마감 날짜·알림 기준을 입력하고, 목록에서 상태별로 찾습니다.</p>
+        <img class="screenshot" src="docs/images/task-management.png" alt="스플의 마감 알림, 할 일 추가, 내 일정 영역을 보여 주는 화면." />
+      </section>
+
+      <section class="slide" aria-labelledby="title-5" aria-hidden="true">
+        <span class="slide-number">05</span>
+        <p class="eyebrow">USER FLOW</p>
+        <h2 id="title-5">사용 흐름</h2>
+        <ol class="flow">
+          <li><strong>01</strong><span>할 일 등록</span><small>제목과 마감 날짜를 정합니다.</small></li>
+          <li><strong>02</strong><span>달력에서 확인</span><small>날짜별 일정과 남은 일수를 봅니다.</small></li>
+          <li><strong>03</strong><span>마감 알림</span><small>임박한 일정은 화면에 표시됩니다.</small></li>
+          <li><strong>04</strong><span>완료 처리</span><small>끝난 일은 체크하고, 필요하면 다시 해제합니다.</small></li>
+        </ol>
+      </section>
+
+      <section class="slide" aria-labelledby="title-6" aria-hidden="true">
+        <span class="slide-number">06</span>
+        <p class="eyebrow">IMPLEMENTATION</p>
+        <h2 id="title-6">구현 구조</h2>
+        <ul class="file-list">
+          <li><code>index.html</code><span>화면 구조와 입력 요소</span></li>
+          <li><code>style.css</code><span>달력 격자와 일정 상태별 디자인</span></li>
+          <li><code>app.js</code><span>일정 관리, 날짜 계산, 알림과 로컬 저장</span></li>
+        </ul>
+        <p class="note">별도 서버 없이 브라우저에서 실행합니다. 일정은 현재 브라우저의 localStorage에 저장되며, 앱을 닫은 동안에는 백그라운드 알림을 보내지 않습니다.</p>
+      </section>
+
+      <section class="slide" aria-labelledby="title-7" aria-hidden="true">
+        <span class="slide-number">07</span>
+        <p class="eyebrow">DEMO</p>
+        <h2 id="title-7">시연 순서</h2>
+        <ol class="demo-list">
+          <li>오늘 이후의 날짜로 일정을 추가합니다.</li>
+          <li>달력 카드와 목록에서 일정을 확인합니다.</li>
+          <li>완료 표시를 켰다가 다시 해제합니다.</li>
+          <li>일정을 삭제하고 새로고침 후 목록을 확인합니다.</li>
+        </ol>
+        <div class="link-row">
+          <a href="index.html">앱 열기</a>
+          <a href="https://github.com/vikira12/study_plan">GitHub 저장소</a>
+        </div>
+      </section>
+    </main>
+
+    <nav class="controls" aria-label="슬라이드 이동">
+      <button id="previous-slide" type="button" aria-label="이전 슬라이드">이전</button>
+      <output id="slide-counter" aria-live="polite">1 / 7</output>
+      <button id="next-slide" type="button" aria-label="다음 슬라이드">다음</button>
+    </nav>
+    <p class="sr-only">오른쪽 또는 왼쪽 화살표 키로 슬라이드를 이동할 수 있습니다.</p>
+  </body>
+</html>
