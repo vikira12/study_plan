@@ -50,7 +50,7 @@ async function build() {
 
   const calendar = { years, holidaysUpdatedAt, schoolUpdatedAt, holidays, schoolEvents };
   await fs.mkdir(path.join(output, "data"), { recursive: true });
-  await Promise.all(["index.html", "style.css", "app.js", "presentation.html"].map((file) =>
+  await Promise.all(["index.html", "style.css", "app.js", "wallpaper-widget.js", "presentation.html"].map((file) =>
     fs.copyFile(path.join(root, file), path.join(output, file))));
   await fs.writeFile(path.join(output, "data", "calendar.json"), `${JSON.stringify(calendar)}\n`);
   if (process.argv.includes("--snapshot")) {

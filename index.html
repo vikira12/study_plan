@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>스플 | 스터디 플래너</title>
     <script>
+      document.documentElement.dataset.wallpaper = String(new URLSearchParams(location.search).get("wallpaper") === "1");
       const savedView = new URLSearchParams(location.search).get("view");
       document.documentElement.dataset.page = ["calendar", "add", "tasks"].includes(savedView) ? savedView : "calendar";
       let savedTheme = null;
@@ -14,6 +15,7 @@
     </script>
     <link rel="stylesheet" href="style.css" />
     <script src="app.js" defer></script>
+    <script src="wallpaper-widget.js" defer></script>
   </head>
   <body>
     <main class="page">
@@ -182,6 +184,10 @@
             <h2 id="list-heading">내 일정</h2>
             <p id="task-count" aria-live="polite">0개 일정</p>
           </div>
+        </div>
+        <div class="form-actions">
+          <button id="export-tasks" class="secondary-button" type="button">개인 일정 내보내기</button>
+          <label class="secondary-button">개인 일정 가져오기 <input id="import-tasks" type="file" accept=".json,application/json" /></label>
         </div>
         <div class="list-tools">
           <label class="field">

@@ -1,11 +1,17 @@
-// 의존성 없는 로컬 서버: 공개 공휴일·학교 학사일정을 받아 앱에 전달한다.
+// 의존성 없는 로컬 서버: 공개 일정과 이 PC의 개인 일정을 웹·배경화면에 제공한다.
 const http = require("node:http");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const os = require("node:os");
 
 const host = process.env.HOST || "127.0.0.1";
 const port = Number(process.env.PORT) || 3000;
 const root = __dirname;
+const taskStorePath = process.env.STUDY_PLANNER_DATA_FILE || path.join(
+  process.env.LOCALAPPDATA || path.join(os.homedir(), ".local", "share"), "StudyPlanner", "tasks.json");
+let taskWrites = Promise.resolve();
+const layoutStorePath = process.env.STUDY_PLANNER_LAYOUT_FILE || path.join(path.dirname(taskStorePath), "wallpaper-layout.json");
+let layoutWrites = Promise.resolve();
 const schoolUrl = "https://dsmhs.djsch.kr/scheduleH/list.do";
 const schoolPage = "https://dsmhs.djsch.kr/scheduleH/list.do?m=0203&s=dsmhs";
 const cache = new Map();
@@ -14,6 +20,9 @@ const files = new Map([
   ["/index.html", ["index.html", "text/html; charset=utf-8"]],
   ["/style.css", ["style.css", "text/css; charset=utf-8"]],
   ["/app.js", ["app.js", "text/javascript; charset=utf-8"]],
+  ["/wallpaper.html", ["wallpaper.html", "text/html; charset=utf-8"]],
+  ["/wallpaper-widget.js", ["wallpaper-widget.js", "text/javascript; charset=utf-8"]],
+  ["/data/calendar.json", ["data/calendar.json", "application/json; charset=utf-8"]],
   ["/presentation.html", ["presentation.html", "text/html; charset=utf-8"]],
 ]);
 const holidayTranslations = {
@@ -36,6 +45,89 @@ const holidayTranslations = {
 function sendJson(response, status, data) {
   response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
   response.end(JSON.stringify(data));
+}
+
+function validTask(task) {
+  return task && typeof task === "object" &&
+    typeof task.id === "string" && task.id.length > 0 && task.id.length <= 100 &&
+    typeof task.title === "string" && task.title.trim().length > 0 && task.title.length <= 100 &&
+    validDate(task.startDate) && validDate(task.dueDate) &&
+    task.startDate <= task.dueDate && [1, 3, 7].includes(task.reminderDays) &&
+    ["study", "assignment", "review", "exam", "other"].includes(task.category) &&
+    typeof task.completed === "boolean" &&
+    (task.notifiedFor === null || typeof task.notifiedFor === "string");
+}
+
+function validDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+async function readTaskStore() {
+  try {
+    const data = JSON.parse(await fs.readFile(taskStorePath, "utf8"));
+    if (!Array.isArray(data.tasks) || !data.tasks.every(validTask) || new Set(data.tasks.map((task) => task.id)).size !== data.tasks.length) throw new Error("개인 일정 파일 형식 오류");
+    return { initialized: true, tasks: data.tasks };
+  } catch (error) {
+    if (error.code === "ENOENT") return { initialized: false, tasks: [] };
+    throw error;
+  }
+}
+
+async function writeTaskStore(tasks) {
+  await fs.mkdir(path.dirname(taskStorePath), { recursive: true });
+  const temporary = `${taskStorePath}.${process.pid}.tmp`;
+  try {
+    await fs.writeFile(temporary, JSON.stringify({ tasks, updatedAt: new Date().toISOString() }), "utf8");
+    await fs.rename(temporary, taskStorePath);
+  } catch (error) {
+    await fs.rm(temporary, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+async function readRequestJson(request) {
+  let text = "";
+  for await (const chunk of request) {
+    text += chunk;
+    if (text.length > 1_000_000) throw Object.assign(new Error("요청이 너무 큽니다."), { status: 413 });
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw Object.assign(new Error("JSON 형식이 올바르지 않습니다."), { status: 400 });
+  }
+}
+
+function validLayout(layout) {
+  return layout && ["left", "top", "width", "height"].every((key) =>
+    typeof layout[key] === "number" && Number.isFinite(layout[key]) && layout[key] >= 0 && layout[key] <= 1) &&
+    layout.width > 0 && layout.height > 0 && layout.left + layout.width <= 1.000001 &&
+    layout.top + layout.height <= 1.000001 && typeof layout.locked === "boolean";
+}
+
+async function readLayout() {
+  try {
+    const data = JSON.parse(await fs.readFile(layoutStorePath, "utf8"));
+    if (!validLayout(data.layout)) throw new Error("달력 배치 형식 오류");
+    return data;
+  } catch (error) {
+    if (error.code === "ENOENT") return { layout: null };
+    throw error;
+  }
+}
+
+async function writeLayout(layout) {
+  await fs.mkdir(path.dirname(layoutStorePath), { recursive: true });
+  const temporary = `${layoutStorePath}.${process.pid}.tmp`;
+  try {
+    await fs.writeFile(temporary, JSON.stringify({ layout }), "utf8");
+    await fs.rename(temporary, layoutStorePath);
+  } catch (error) {
+    await fs.rm(temporary, { force: true }).catch(() => {});
+    throw error;
+  }
 }
 
 async function fetchText(url, retries = 0) {
@@ -149,11 +241,67 @@ async function schoolEventsForMonth(year, month) {
 }
 
 const server = http.createServer(async (request, response) => {
+  const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
+  if (url.pathname === "/api/tasks" || url.pathname === "/api/wallpaper-layout") {
+    const localAddress = ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(request.socket.remoteAddress);
+    const localHost = [`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`].includes(request.headers.host);
+    if (!localAddress || !localHost || (request.headers.origin && request.headers.origin !== `http://${request.headers.host}`)) {
+      sendJson(response, 403, { error: "개인 일정은 이 PC에서만 접근할 수 있습니다." });
+      return;
+    }
+    if (request.method !== "GET" && request.method !== "PUT") {
+      sendJson(response, 405, { error: "GET 또는 PUT 요청만 지원합니다." });
+      return;
+    }
+    try {
+      if (url.pathname === "/api/wallpaper-layout") {
+        await layoutWrites.catch(() => {});
+        if (request.method === "GET") {
+          sendJson(response, 200, await readLayout());
+          return;
+        }
+        if (!request.headers["content-type"]?.startsWith("application/json")) {
+          sendJson(response, 415, { error: "JSON 요청만 지원합니다." });
+          return;
+        }
+        const body = await readRequestJson(request);
+        if (!validLayout(body?.layout)) {
+          sendJson(response, 400, { error: "달력 위치 또는 크기가 올바르지 않습니다." });
+          return;
+        }
+        layoutWrites = layoutWrites.catch(() => {}).then(() => writeLayout(body.layout));
+        await layoutWrites;
+        sendJson(response, 200, { saved: true });
+        return;
+      }
+      await taskWrites.catch(() => {});
+      if (request.method === "GET") {
+        sendJson(response, 200, await readTaskStore());
+        return;
+      }
+      if (!request.headers["content-type"]?.startsWith("application/json")) {
+        sendJson(response, 415, { error: "JSON 요청만 지원합니다." });
+        return;
+      }
+      const body = await readRequestJson(request);
+      if (!Array.isArray(body?.tasks) || body.tasks.length > 1000 ||
+          !body.tasks.every(validTask) || new Set(body.tasks.map((task) => task.id)).size !== body.tasks.length) {
+        sendJson(response, 400, { error: "일정 데이터 형식이 올바르지 않습니다." });
+        return;
+      }
+      taskWrites = taskWrites.catch(() => {}).then(() => writeTaskStore(body.tasks));
+      await taskWrites;
+      sendJson(response, 200, { saved: true });
+    } catch (error) {
+      console.error(url.pathname, error.message);
+      sendJson(response, error.status || 500, { error: error.status ? error.message : "로컬 데이터를 저장하거나 읽지 못했습니다." });
+    }
+    return;
+  }
   if (request.method !== "GET") {
     sendJson(response, 405, { error: "GET 요청만 지원합니다." });
     return;
   }
-  const url = new URL(request.url, `http://${request.headers.host || "localhost"}`);
   const year = Number(url.searchParams.get("year"));
   const month = Number(url.searchParams.get("month"));
   if (url.pathname === "/api/holidays" || url.pathname === "/api/school-events") {

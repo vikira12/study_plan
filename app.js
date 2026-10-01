@@ -1,4 +1,11 @@
 const storageKey = "studyPlannerTasks";
+const sharedMarkerKey = "studyPlannerLocalSyncInitialized";
+const sharedPendingKey = "studyPlannerLocalPending";
+const wallpaperMode = new URLSearchParams(location.search).get("wallpaper") === "1";
+const sharedMode = ["127.0.0.1", "localhost", "::1"].includes(location.hostname) && location.protocol === "http:";
+let sharedReady = false;
+let sharedWrite = Promise.resolve();
+let sharedRevision = 0;
 const dayMilliseconds = 86_400_000;
 const form = document.querySelector("#task-form");
 const formHeading = document.querySelector("#form-heading");
@@ -13,6 +20,8 @@ const storageMessage = document.querySelector("#storage-message");
 const submitButton = document.querySelector("#submit-button");
 const cancelButton = document.querySelector("#cancel-button");
 const taskList = document.querySelector("#task-list");
+const exportButton = document.querySelector("#export-tasks");
+const importInput = document.querySelector("#import-tasks");
 const emptyState = document.querySelector("#empty-state");
 const taskCount = document.querySelector("#task-count");
 const statusFilter = document.querySelector("#status-filter");
@@ -133,6 +142,7 @@ function resetDueDate() {
 }
 
 function currentView() {
+  if (wallpaperMode) return "calendar";
   const requested = new URLSearchParams(window.location.search).get("view");
   return ["calendar", "add", "tasks"].includes(requested) ? requested : "calendar";
 }
@@ -263,18 +273,109 @@ function loadTasks() {
 }
 
 function saveTasks(nextTasks) {
+  if (wallpaperMode) return false;
+  if (sharedMode) savePreference(sharedPendingKey, "yes");
   try {
     localStorage.setItem(storageKey, JSON.stringify(nextTasks));
     tasks = nextTasks;
     storageMessage.hidden = true;
+    if (sharedMode && sharedReady) queueSharedSave(nextTasks);
     return true;
   } catch {
     tasks = nextTasks;
+    if (sharedMode && sharedReady) queueSharedSave(nextTasks);
     storageMessage.hidden = false;
     storageMessage.textContent = "브라우저에 저장하지 못했습니다. 현재 탭에서는 사용할 수 있지만 새로고침하면 일정이 사라질 수 있습니다.";
     return true;
   }
 }
+
+function queueSharedSave(snapshot) {
+  const revision = ++sharedRevision;
+  savePreference(sharedPendingKey, "yes");
+  sharedWrite = sharedWrite.catch(() => {}).then(async () => {
+    const response = await fetch("/api/tasks", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tasks: snapshot }), signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) throw new Error("로컬 일정 저장 실패");
+    if (revision === sharedRevision) {
+      savePreference(sharedPendingKey, "no");
+      storageMessage.hidden = true;
+    }
+  }).catch(() => {
+    storageMessage.hidden = false;
+    storageMessage.textContent = "로컬 저장소에 동기화하지 못했습니다. 서버 실행 상태를 확인하고 새로고침해 주세요.";
+  });
+}
+
+async function loadSharedTasks() {
+  if (!sharedMode) return;
+  try {
+    const response = await fetch("/api/tasks", { cache: "no-store", signal: AbortSignal.timeout(5000) });
+    if (!response.ok) throw new Error("로컬 서버 연결 실패");
+    const data = await response.json();
+    if (!Array.isArray(data.tasks)) throw new Error("로컬 일정 형식 오류");
+    const remote = data.tasks.map(normalizeTask);
+    if (wallpaperMode) {
+      tasks = remote;
+      storageMessage.hidden = true;
+      render();
+      return;
+    }
+    const firstSync = readPreference(sharedMarkerKey) !== "yes";
+    const pending = readPreference(sharedPendingKey) === "yes";
+    const merged = pending || !data.initialized ? tasks : firstSync
+      ? [...remote, ...tasks.filter((task) => !remote.some((item) => item.id === task.id))] : remote;
+    sharedReady = true;
+    savePreference(sharedMarkerKey, "yes");
+    saveTasks(merged);
+    render();
+  } catch {
+    storageMessage.hidden = false;
+    storageMessage.textContent = "로컬 서버에 연결하지 못했습니다. 개인 일정은 이 브라우저에서만 임시로 보입니다.";
+  }
+}
+
+exportButton.addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify({ tasks }, null, 2)], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = "study-planner-tasks.json";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+});
+
+importInput.addEventListener("change", async () => {
+  const file = importInput.files?.[0];
+  if (!file) return;
+  try {
+    if (file.size > 1_000_000) throw new Error("파일이 너무 큽니다.");
+    const parsed = JSON.parse(await file.text());
+    if (!Array.isArray(parsed.tasks)) throw new Error("일정 파일 형식이 올바르지 않습니다.");
+    const imported = parsed.tasks.map(normalizeTask);
+    if (imported.length > 1000) throw new Error("일정은 1000개 이하만 가져올 수 있습니다.");
+    const existing = new Set(tasks.map((task) => task.id));
+    const additions = imported.filter((task) => {
+      if (!task.id || task.id.length > 100 || task.title.length > 100) throw new Error("일정의 ID 또는 제목이 너무 길거나 비어 있습니다.");
+      if (existing.has(task.id)) return false;
+      existing.add(task.id);
+      return true;
+    });
+    if (tasks.length + additions.length > 1000) throw new Error("일정은 1000개 이하만 가져올 수 있습니다.");
+    if (additions.length) saveTasks([...tasks, ...additions]);
+    render();
+    storageMessage.hidden = false;
+    storageMessage.textContent = `${additions.length}개 일정을 가져왔습니다. 같은 ID의 기존 일정은 유지했습니다.`;
+  } catch (error) {
+    storageMessage.hidden = false;
+    storageMessage.textContent = error.message || "일정 파일을 읽지 못했습니다.";
+  } finally {
+    importInput.value = "";
+  }
+});
 
 function deadlineState(task) {
   if (task.completed) return { label: "완료", kind: "complete" };
@@ -437,7 +538,7 @@ async function loadCalendarData() {
   const requestId = ++calendarDataRequest;
   const year = viewedMonth.getFullYear();
   const month = viewedMonth.getMonth() + 1;
-  schoolEvents = [];
+  if (!wallpaperMode) schoolEvents = [];
   schoolStatus.dataset.loaded = "false";
   schoolStatus.dataset.updatedAt = "";
   schoolStatus.textContent = "학교 일정을 불러오는 중…";
@@ -481,7 +582,7 @@ async function loadCalendarData() {
     renderSchoolEvents();
   } else {
     const error = schoolResult.error;
-    if (error.status === 404 || error.code === "missing-api") {
+    if (wallpaperMode || error.status === 404 || error.code === "missing-api") {
       await showStaticCalendarData(requestId);
       return;
     }
@@ -505,6 +606,7 @@ function calendarDateAt(clientX, clientY) {
 }
 
 function startCalendarDrag(event, task, date) {
+  if (wallpaperMode) return;
   if (event.button !== 0 || calendarDrag) return;
   const card = event.currentTarget;
   const bounds = card.getBoundingClientRect();
@@ -638,7 +740,7 @@ function renderCalendar() {
     }
     dateHeader.append(dateMeta);
     const dayLabel = date.getDate() === 1 ? `${date.getMonth() + 1}월 ${date.getDate()}일` : String(date.getDate());
-    if (dayNumber(parseDate(key)) >= today) {
+    if (!wallpaperMode && dayNumber(parseDate(key)) >= today) {
       const addButton = document.createElement("button");
       addButton.type = "button";
       addButton.textContent = dayLabel;
@@ -663,7 +765,7 @@ function renderCalendar() {
         const card = document.createElement("a");
         card.className = "calendar-event is-school";
         card.style.gridRow = String(week.rows.get(task));
-        card.href = "https://dsmhs.djsch.kr/scheduleH/list.do?m=0203&s=dsmhs";
+        if (!wallpaperMode) card.href = "https://dsmhs.djsch.kr/scheduleH/list.do?m=0203&s=dsmhs";
         card.target = "_blank";
         card.rel = "noopener noreferrer";
         card.setAttribute("aria-label", `학교 일정 ${task.title}, ${formatDate(task.startDate)}부터 ${formatDate(task.dueDate)}까지. 학교 원본 보기`);
@@ -684,6 +786,7 @@ function renderCalendar() {
       const state = deadlineState(task);
       const card = document.createElement("button");
       card.type = "button";
+      card.disabled = wallpaperMode;
       card.className = `calendar-event category-${task.category} is-${state.kind}`;
       card.style.gridRow = String(week.rows.get(task));
       const spansPreviousDay = task.startDate < key && index % 7 !== 0;
@@ -691,7 +794,7 @@ function renderCalendar() {
       if (task.startDate !== task.dueDate) card.classList.add("is-range");
       if (spansPreviousDay) card.classList.add("continues-before");
       if (spansNextDay) card.classList.add("continues-after");
-      card.setAttribute("aria-label", `${categoryLabels[task.category]} ${task.title}, ${formatDate(task.startDate)}부터 ${formatDate(task.dueDate)}까지, ${state.label}. 클릭하여 수정, 우클릭하여 완료 상태 변경, 드래그하여 이동`);
+      card.setAttribute("aria-label", `${categoryLabels[task.category]} ${task.title}, ${formatDate(task.startDate)}부터 ${formatDate(task.dueDate)}까지, ${state.label}. ${wallpaperMode ? "읽기 전용" : "클릭하여 수정, 우클릭하여 완료 상태 변경, 드래그하여 이동"}`);
       const cardTitle = document.createElement("span");
       cardTitle.className = "calendar-event-title";
       cardTitle.textContent = task.title;
@@ -712,10 +815,12 @@ function renderCalendar() {
       card.addEventListener("pointermove", (event) => updateCalendarCardCursor(event, task, key));
       card.addEventListener("pointerleave", () => { card.style.cursor = "grab"; });
       card.addEventListener("click", () => {
+        if (wallpaperMode) return;
         if (!suppressCalendarClick) beginEdit(task);
       });
       card.addEventListener("contextmenu", (event) => {
         event.preventDefault();
+        if (wallpaperMode) return;
         if (calendarDrag) return;
         const completed = !task.completed;
         const next = tasks.map((entry) => entry.id === task.id ? { ...entry, completed } : entry);
@@ -814,6 +919,7 @@ function updateNotificationStatus() {
 }
 
 function notifyDueTasks() {
+  if (wallpaperMode) return;
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   for (const task of tasks) {
     if (deadlineState(task).kind !== "urgent") continue;
@@ -937,6 +1043,10 @@ form.addEventListener("submit", (event) => {
       : task);
     if (!saveTasks(next)) return;
   } else {
+    if (sharedMode && tasks.length >= 1000) {
+      formMessage.textContent = "로컬 저장소에는 일정 1000개까지 저장할 수 있습니다.";
+      return;
+    }
     const newTask = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       title, startDate, dueDate, reminderDays, category, completed: false, notifiedFor: null,
@@ -1016,9 +1126,23 @@ notificationButton.addEventListener("click", async () => {
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) render();
 });
-setInterval(render, 60_000);
+setInterval(() => {
+  if (wallpaperMode) {
+    const now = new Date();
+    if (viewedMonth.getFullYear() !== now.getFullYear() || viewedMonth.getMonth() !== now.getMonth()) {
+      viewedMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      loadCalendarData();
+    }
+  }
+  render();
+}, 60_000);
+if (wallpaperMode) {
+  setInterval(loadSharedTasks, 15_000);
+  setInterval(loadCalendarData, 30 * 60_000);
+}
 
-tasks = loadTasks();
+tasks = wallpaperMode ? [] : loadTasks();
+loadSharedTasks();
 const preferredTheme = readPreference(themeKey);
 const systemPrefersDark = typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
 applyTheme(preferredTheme === "dark" || (preferredTheme !== "light" && systemPrefersDark) ? "dark" : "light");
