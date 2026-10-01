@@ -691,7 +691,7 @@ function renderCalendar() {
       if (task.startDate !== task.dueDate) card.classList.add("is-range");
       if (spansPreviousDay) card.classList.add("continues-before");
       if (spansNextDay) card.classList.add("continues-after");
-      card.setAttribute("aria-label", `${categoryLabels[task.category]} ${task.title}, ${formatDate(task.startDate)}부터 ${formatDate(task.dueDate)}까지, ${state.label}. 클릭하여 수정하거나 드래그하여 이동`);
+      card.setAttribute("aria-label", `${categoryLabels[task.category]} ${task.title}, ${formatDate(task.startDate)}부터 ${formatDate(task.dueDate)}까지, ${state.label}. 클릭하여 수정, 우클릭하여 완료 상태 변경, 드래그하여 이동`);
       const cardTitle = document.createElement("span");
       cardTitle.className = "calendar-event-title";
       cardTitle.textContent = task.title;
@@ -713,6 +713,16 @@ function renderCalendar() {
       card.addEventListener("pointerleave", () => { card.style.cursor = "grab"; });
       card.addEventListener("click", () => {
         if (!suppressCalendarClick) beginEdit(task);
+      });
+      card.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        if (calendarDrag) return;
+        const completed = !task.completed;
+        const next = tasks.map((entry) => entry.id === task.id ? { ...entry, completed } : entry);
+        if (saveTasks(next)) {
+          render();
+          calendarDragStatus.textContent = `${task.title} 일정을 ${completed ? "완료" : "진행 중"} 상태로 변경했습니다.`;
+        }
       });
       events.append(card);
     }
