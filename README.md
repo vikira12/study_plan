@@ -49,3 +49,13 @@ Codex의 도움을 받아 만들었고, 사람이 검증했습니다.
 ## 알려진 문제
 
 GitHub Pages의 학교·공휴일 정보는 배포 작업에서 생성한 시점의 자료이며 실시간 조회가 아닙니다. 브라우저를 닫은 동안 마감 알림은 전송되지 않습니다.
+
+## 화면 미리보기
+
+![2026년 10월 달력과 학교 일정](docs/images/calendar-october-2026.png)
+
+![일정 입력 화면](docs/images/task-form.png)
+
+![내 일정 화면](docs/images/task-list.png)
+
+화면 설명은 [스크린샷 기록](docs/ui-screenshots.md)에서 볼 수 있습니다.
