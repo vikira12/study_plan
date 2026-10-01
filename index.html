@@ -4,6 +4,14 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>스플 | 스터디 플래너</title>
+    <script>
+      const savedView = new URLSearchParams(location.search).get("view");
+      document.documentElement.dataset.page = ["calendar", "add", "tasks"].includes(savedView) ? savedView : "calendar";
+      let savedTheme = null;
+      try { savedTheme = localStorage.getItem("studyPlannerTheme"); } catch { /* 저장소 접근이 차단될 수 있다. */ }
+      const prefersDark = typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches;
+      document.documentElement.dataset.theme = savedTheme === "dark" || (savedTheme !== "light" && prefersDark) ? "dark" : "light";
+    </script>
     <link rel="stylesheet" href="style.css" />
     <script src="app.js" defer></script>
   </head>
@@ -11,31 +19,42 @@
     <main class="page">
       <header class="page-header">
         <div class="brand">
-          <span class="brand-mark" aria-hidden="true">✓</span>
           <div>
             <p class="eyebrow">STUDY PLANNER</p>
             <h1>스플 <span>스터디 플래너</span></h1>
           </div>
         </div>
-        <nav class="quick-nav" aria-label="빠른 이동">
-          <a href="#calendar-heading">달력</a>
-          <a href="#task-form">일정 입력</a>
-          <a href="#list-heading">내 일정</a>
-        </nav>
+        <div class="header-actions">
+          <nav class="quick-nav" aria-label="화면 이동">
+            <a href="index.html?view=calendar" data-nav="calendar">달력</a>
+            <a href="index.html?view=add" data-nav="add">일정 입력</a>
+            <a href="index.html?view=tasks" data-nav="tasks">내 일정</a>
+          </nav>
+          <button id="theme-toggle" class="theme-toggle" type="button" aria-pressed="false">다크 모드</button>
+        </div>
       </header>
 
       <p id="storage-message" class="notice notice-error" role="alert" hidden></p>
 
-      <section class="calendar-section" aria-labelledby="calendar-heading">
+      <div class="calendar-layout" data-view="calendar">
+        <section class="calendar-section" aria-labelledby="calendar-heading">
         <div class="calendar-toolbar">
           <div>
             <p class="calendar-kicker">MONTHLY VIEW</p>
             <h2 id="calendar-heading"><span id="calendar-month" aria-live="polite"></span></h2>
           </div>
-          <div class="calendar-controls" aria-label="달력 이동">
-            <button id="previous-month" class="icon-button" type="button" aria-label="이전 달">‹</button>
-            <button id="today-button" class="today-button" type="button">오늘</button>
-            <button id="next-month" class="icon-button" type="button" aria-label="다음 달">›</button>
+          <div class="calendar-actions">
+            <label class="calendar-size-label" for="calendar-size">달력 크기</label>
+            <select id="calendar-size" aria-label="달력 크기">
+              <option value="compact">작게</option>
+              <option value="normal">보통</option>
+              <option value="large">크게</option>
+            </select>
+            <div class="calendar-controls" aria-label="달력 이동">
+              <button id="previous-month" class="icon-button" type="button" aria-label="이전 달">‹</button>
+              <button id="today-button" class="today-button" type="button">오늘</button>
+              <button id="next-month" class="icon-button" type="button" aria-label="다음 달">›</button>
+            </div>
           </div>
         </div>
         <div class="calendar-scroll">
@@ -46,10 +65,42 @@
             <div id="calendar-grid" class="calendar-grid" role="grid" aria-label="월간 일정 달력"></div>
           </div>
         </div>
-        <p class="calendar-tip">날짜를 누르면 그날의 일정을 추가할 수 있습니다. 일정 카드를 누르면 수정 화면이 열립니다.</p>
-      </section>
+        <p class="calendar-tip">날짜를 누르면 일정을 추가합니다. 카드를 드래그하면 기간을 옮기고, 시작일·마감일 카드의 가장자리를 드래그하면 기간을 조정합니다. 카드를 클릭하면 자세히 수정합니다.</p>
+        <p id="calendar-drag-status" class="calendar-drag-status" role="status" aria-live="polite"></p>
+        </section>
+        <aside class="calendar-sidebar" aria-label="일정 요약">
+        <section class="insight-card" aria-labelledby="month-summary-heading">
+          <p class="sidebar-kicker">AT A GLANCE</p>
+          <h2 id="month-summary-heading">선택한 달 한눈에</h2>
+          <p id="month-summary-label" class="sidebar-caption"></p>
+          <div class="stat-grid">
+            <div class="stat stat-total"><strong id="month-total">0</strong><span>전체</span></div>
+            <div class="stat stat-pending"><strong id="month-pending">0</strong><span>진행 중</span></div>
+            <div class="stat stat-complete"><strong id="month-completed">0</strong><span>완료</span></div>
+          </div>
+          <div class="progress-heading"><span>완료율</span><strong id="month-progress-label">0%</strong></div>
+          <div class="progress-track" role="progressbar" aria-label="선택한 달 일정 완료율" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="month-progress"></span></div>
+        </section>
+        <section class="insight-card" aria-labelledby="category-heading">
+          <p class="sidebar-kicker">CATEGORIES</p>
+          <h2 id="category-heading">일정 유형</h2>
+          <ul class="category-legend">
+            <li class="category-study"><span class="category-dot"></span>학습</li>
+            <li class="category-assignment"><span class="category-dot"></span>과제</li>
+            <li class="category-review"><span class="category-dot"></span>복습</li>
+            <li class="category-exam"><span class="category-dot"></span>시험</li>
+            <li class="category-other"><span class="category-dot"></span>기타</li>
+          </ul>
+        </section>
+        <section class="insight-card" aria-labelledby="upcoming-heading">
+          <p class="sidebar-kicker">COMING UP</p>
+          <h2 id="upcoming-heading">다가오는 일정</h2>
+          <ul id="upcoming-list" class="upcoming-list" aria-live="polite"></ul>
+        </section>
+        </aside>
+      </div>
 
-      <section class="panel alert-panel" aria-labelledby="alerts-heading">
+      <section class="panel alert-panel" data-view="calendar" aria-labelledby="alerts-heading">
         <div class="section-heading alert-heading">
           <div>
             <h2 id="alerts-heading">마감 알림</h2>
@@ -61,27 +112,48 @@
         <ul id="alert-list" class="alert-list" aria-live="polite"></ul>
       </section>
 
-      <section class="panel" aria-labelledby="form-heading">
+      <section class="panel" data-view="add" aria-labelledby="form-heading">
         <div class="section-heading">
           <h2 id="form-heading">할 일 추가</h2>
-          <p>제목과 마감 날짜를 입력해 주세요.</p>
+          <p>제목과 일정의 시작·마감 날짜를 입력해 주세요.</p>
         </div>
         <form id="task-form" novalidate>
           <div class="form-grid">
-            <label class="field field-title">
-              <span>제목</span>
-              <input id="task-title" name="title" type="text" maxlength="100" placeholder="예: 영어 단어 30개 외우기" autocomplete="off" required />
-            </label>
-            <label class="field">
-              <span>마감 날짜</span>
+            <div class="field field-title">
+              <label for="task-title">제목</label>
+              <input id="task-title" name="title" type="text" maxlength="100" placeholder="예: 영어 단어 30개 외우기" autocomplete="off" aria-describedby="title-message" required />
+              <span id="title-message" class="title-message" role="alert"></span>
+            </div>
+            <div class="field">
+              <label for="task-start">시작 날짜</label>
+              <input id="task-start" name="start" type="date" required />
+            </div>
+            <div class="field">
+              <label for="task-due">마감 날짜</label>
               <input id="task-due" name="due" type="date" required />
-            </label>
+              <div class="date-shortcuts" role="group" aria-label="빠른 마감 날짜 선택">
+                <button type="button" data-days="0">오늘</button>
+                <button type="button" data-days="1">내일</button>
+                <button type="button" data-days="3">3일 뒤</button>
+                <button type="button" data-days="7">7일 뒤</button>
+              </div>
+            </div>
             <label class="field">
               <span>알림 기준</span>
               <select id="task-reminder" name="reminder">
                 <option value="1" selected>1일 전</option>
                 <option value="3">3일 전</option>
                 <option value="7">7일 전</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>일정 유형</span>
+              <select id="task-category" name="category">
+                <option value="study">학습</option>
+                <option value="assignment">과제</option>
+                <option value="review">복습</option>
+                <option value="exam">시험</option>
+                <option value="other">기타</option>
               </select>
             </label>
           </div>
@@ -93,7 +165,7 @@
         </form>
       </section>
 
-      <section class="panel" aria-labelledby="list-heading">
+      <section class="panel" data-view="tasks" aria-labelledby="list-heading">
         <div class="section-heading list-heading">
           <div>
             <h2 id="list-heading">내 일정</h2>
