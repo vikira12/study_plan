@@ -73,6 +73,7 @@ const koreanHolidays = {
 const liveHolidays = new Map();
 let schoolEvents = [];
 let calendarDataRequest = 0;
+let staticCalendarPromise = null;
 
 function holidayName(key) {
   return koreanHolidays[Number(key.slice(0, 4))]?.[key.slice(5)] || liveHolidays.get(key) || null;
@@ -371,7 +372,10 @@ function renderSchoolEvents() {
     empty.textContent = "이 달에 공개된 학교 일정이 없습니다.";
     schoolEventList.append(empty);
   }
-  if (schoolStatus.dataset.loaded === "true") schoolStatus.textContent = `선택한 달 행사 ${monthly.length}개 · 학교 공개 자료`;
+  if (schoolStatus.dataset.loaded === "true") {
+    schoolStatus.textContent = `선택한 달 행사 ${monthly.length}개 · 학교 공개 자료` +
+      (schoolStatus.dataset.updatedAt ? ` · ${schoolStatus.dataset.updatedAt} 갱신` : "");
+  }
 }
 
 async function requestCalendarData(url) {
@@ -391,18 +395,61 @@ async function requestCalendarData(url) {
   return data.events;
 }
 
+async function requestStaticCalendarData() {
+  if (!staticCalendarPromise) {
+    staticCalendarPromise = fetch("data/calendar.json").then(async (response) => {
+      if (!response.ok) throw new Error("배포 자료를 읽을 수 없습니다.");
+      const data = await response.json();
+      if (!Array.isArray(data.holidays) || !Array.isArray(data.schoolEvents)) {
+        throw new Error("배포 자료 형식이 올바르지 않습니다.");
+      }
+      return data;
+    }).catch((error) => {
+      staticCalendarPromise = null;
+      throw error;
+    });
+  }
+  return staticCalendarPromise;
+}
+
+async function showStaticCalendarData(requestId) {
+  try {
+    const data = await requestStaticCalendarData();
+    if (requestId !== calendarDataRequest) return;
+    for (const entry of data.holidays) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(entry.date) && typeof entry.name === "string") liveHolidays.set(entry.date, entry.name);
+    }
+    schoolEvents = data.schoolEvents.filter((entry) => entry.source === "school" && typeof entry.title === "string" &&
+      parseDate(entry.startDate) && parseDate(entry.dueDate) && entry.startDate <= entry.dueDate);
+    schoolStatus.dataset.loaded = "true";
+    schoolStatus.dataset.updatedAt = data.schoolUpdatedAt?.slice(0, 10) || "";
+    holidayStatus.textContent = `배포된 공휴일 자료를 표시합니다${data.holidaysUpdatedAt ? ` (${data.holidaysUpdatedAt.slice(0, 10)} 갱신)` : ""}. 임시공휴일은 빠질 수 있습니다.`;
+    renderCalendar();
+    renderSchoolEvents();
+  } catch {
+    if (requestId !== calendarDataRequest) return;
+    holidayStatus.textContent = "배포 자료를 읽지 못했습니다. 2026~2027년은 저장된 공휴일을 표시합니다.";
+    schoolStatus.textContent = "배포된 학교 일정 자료를 읽지 못했습니다. 나중에 새로고침해 주세요.";
+  }
+}
+
 async function loadCalendarData() {
   const requestId = ++calendarDataRequest;
   const year = viewedMonth.getFullYear();
   const month = viewedMonth.getMonth() + 1;
   schoolEvents = [];
   schoolStatus.dataset.loaded = "false";
+  schoolStatus.dataset.updatedAt = "";
   schoolStatus.textContent = "학교 일정을 불러오는 중…";
   renderCalendar();
   renderSchoolEvents();
   if (location.protocol === "file:") {
     holidayStatus.textContent = "실시간 자료는 서버로 열 때 표시됩니다(2026~2027년은 저장된 공휴일 표시).";
     schoolStatus.textContent = "학교 일정은 `node server.js`로 실행하면 표시됩니다.";
+    return;
+  }
+  if (location.hostname.endsWith(".github.io")) {
+    await showStaticCalendarData(requestId);
     return;
   }
 
@@ -434,11 +481,13 @@ async function loadCalendarData() {
     renderSchoolEvents();
   } else {
     const error = schoolResult.error;
-    schoolStatus.textContent = error.status === 404 || error.code === "missing-api"
-      ? "이 주소에는 학교 일정 서버가 없습니다. 작업 폴더에서 node server.js를 실행한 뒤 http://127.0.0.1:3000 으로 열어 주세요."
-      : error.status === 502
-        ? "학교 사이트 응답이 없어 일정을 불러오지 못했습니다. 연결을 확인하고 다시 불러오기를 눌러 주세요."
-        : "학교 일정 서버에 연결하지 못했습니다. 서버 실행 상태와 접속 주소를 확인해 주세요.";
+    if (error.status === 404 || error.code === "missing-api") {
+      await showStaticCalendarData(requestId);
+      return;
+    }
+    schoolStatus.textContent = error.status === 502
+      ? "학교 사이트 응답이 없어 일정을 불러오지 못했습니다. 연결을 확인하고 다시 불러오기를 눌러 주세요."
+      : "학교 일정 서버에 연결하지 못했습니다. 서버 실행 상태와 접속 주소를 확인해 주세요.";
   }
 }
 
@@ -534,6 +583,9 @@ function renderCalendar() {
     const last = dateKey(new Date(year, month, start - firstWeekday + 7));
     weeks.push([...tasks, ...schoolEvents].filter((task) => task.startDate <= last && task.dueDate >= first)
       .sort((a, b) => Number(a.source === "school") - Number(b.source === "school") ||
+        (a.source === "school" ?
+          (dayNumber(parseDate(b.dueDate)) - dayNumber(parseDate(b.startDate))) -
+          (dayNumber(parseDate(a.dueDate)) - dayNumber(parseDate(a.startDate))) : 0) ||
         Number(a.completed) - Number(b.completed) || a.startDate.localeCompare(b.startDate) || a.id.localeCompare(b.id)));
   }
 

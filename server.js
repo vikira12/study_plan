@@ -106,6 +106,22 @@ function semester(date) {
   return month <= 2 ? `${year - 1}-2` : `${year}-${month <= 8 ? 1 : 2}`;
 }
 
+function mergeSchoolEvents(events) {
+  const merged = [];
+  const ordered = [...events].sort((a, b) => a.title.localeCompare(b.title, "ko") ||
+    a.startDate.localeCompare(b.startDate) || a.dueDate.localeCompare(b.dueDate));
+  for (const event of ordered) {
+    const previous = merged.at(-1);
+    if (previous?.title === event.title &&
+        event.startDate <= new Date(Date.parse(`${previous.dueDate}T00:00:00Z`) + 86400000).toISOString().slice(0, 10)) {
+      if (event.dueDate > previous.dueDate) previous.dueDate = event.dueDate;
+    } else {
+      merged.push({ ...event });
+    }
+  }
+  return merged.sort((a, b) => a.startDate.localeCompare(b.startDate) || a.title.localeCompare(b.title, "ko"));
+}
+
 async function schoolEventsForMonth(year, month) {
   const first = new Date(year, month - 1, 1);
   first.setDate(1 - first.getDay());
@@ -124,11 +140,12 @@ async function schoolEventsForMonth(year, month) {
   const from = `${first.getFullYear()}-${String(first.getMonth() + 1).padStart(2, "0")}-${String(first.getDate()).padStart(2, "0")}`;
   const to = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, "0")}-${String(last.getDate()).padStart(2, "0")}`;
   const seen = new Set();
-  return pages.flat().filter((event) => {
-    if (event.startDate > to || event.dueDate < from || seen.has(event.id)) return false;
+  const unique = pages.flat().filter((event) => {
+    if (seen.has(event.id)) return false;
     seen.add(event.id);
     return true;
-  }).sort((a, b) => a.startDate.localeCompare(b.startDate) || a.title.localeCompare(b.title));
+  });
+  return mergeSchoolEvents(unique).filter((event) => event.startDate <= to && event.dueDate >= from);
 }
 
 const server = http.createServer(async (request, response) => {
@@ -168,6 +185,10 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
-server.listen(port, host, () => {
-  console.log(`스터디 플래너: http://${host}:${port}`);
-});
+if (require.main === module) {
+  server.listen(port, host, () => {
+    console.log(`스터디 플래너: http://${host}:${port}`);
+  });
+}
+
+module.exports = { holidaysForYear, schoolEventsForMonth, mergeSchoolEvents };
