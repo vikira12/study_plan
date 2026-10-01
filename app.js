@@ -567,6 +567,19 @@ function finishCalendarDrag(event) {
   calendarDragStatus.textContent = `${drag.task.title} 기간을 ${formatDate(drag.nextStart)}부터 ${formatDate(drag.nextDue)}까지로 변경했습니다.`;
 }
 
+function layoutWeekEvents(events) {
+  const lanes = [];
+  const rows = new Map();
+  for (const event of events) {
+    let lane = lanes.findIndex((items) => items.every((other) =>
+      event.dueDate < other.startDate || event.startDate > other.dueDate));
+    if (lane === -1) lane = lanes.push([]) - 1;
+    lanes[lane].push(event);
+    rows.set(event, lane + 1);
+  }
+  return { events, rows };
+}
+
 function renderCalendar() {
   calendarGrid.replaceChildren();
   const year = viewedMonth.getFullYear();
@@ -581,12 +594,13 @@ function renderCalendar() {
   for (let start = 0; start < cellCount; start += 7) {
     const first = dateKey(new Date(year, month, start - firstWeekday + 1));
     const last = dateKey(new Date(year, month, start - firstWeekday + 7));
-    weeks.push([...tasks, ...schoolEvents].filter((task) => task.startDate <= last && task.dueDate >= first)
+    const events = [...tasks, ...schoolEvents].filter((task) => task.startDate <= last && task.dueDate >= first)
       .sort((a, b) => Number(a.source === "school") - Number(b.source === "school") ||
         (a.source === "school" ?
           (dayNumber(parseDate(b.dueDate)) - dayNumber(parseDate(b.startDate))) -
           (dayNumber(parseDate(a.dueDate)) - dayNumber(parseDate(a.startDate))) : 0) ||
-        Number(a.completed) - Number(b.completed) || a.startDate.localeCompare(b.startDate) || a.id.localeCompare(b.id)));
+        Number(a.completed) - Number(b.completed) || a.startDate.localeCompare(b.startDate) || a.id.localeCompare(b.id));
+    weeks.push(layoutWeekEvents(events));
   }
 
   for (let index = 0; index < cellCount; index += 1) {
@@ -597,8 +611,9 @@ function renderCalendar() {
     const holiday = holidayName(key);
     const weekday = date.getDay();
     const cell = document.createElement("div");
-    const weekTasks = weeks[Math.floor(index / 7)];
-    const dailyTasks = weekTasks.filter((task) => task.startDate <= key && task.dueDate >= key);
+    const week = weeks[Math.floor(index / 7)];
+    const dailyTasks = week.events.filter((task) => task.startDate <= key && task.dueDate >= key)
+      .sort((a, b) => week.rows.get(a) - week.rows.get(b));
     cell.className = `calendar-cell${outside ? " is-outside" : ""}${isToday ? " is-today" : ""}${weekday === 0 ? " is-sunday" : weekday === 6 ? " is-saturday" : ""}${holiday ? " is-holiday" : ""}`;
     cell.dataset.date = key;
     cell.setAttribute("role", "gridcell");
@@ -647,7 +662,7 @@ function renderCalendar() {
       if (isSchool) {
         const card = document.createElement("a");
         card.className = "calendar-event is-school";
-        card.style.gridRow = String(weekTasks.indexOf(task) + 1);
+        card.style.gridRow = String(week.rows.get(task));
         card.href = "https://dsmhs.djsch.kr/scheduleH/list.do?m=0203&s=dsmhs";
         card.target = "_blank";
         card.rel = "noopener noreferrer";
@@ -670,7 +685,7 @@ function renderCalendar() {
       const card = document.createElement("button");
       card.type = "button";
       card.className = `calendar-event category-${task.category} is-${state.kind}`;
-      card.style.gridRow = String(weekTasks.indexOf(task) + 1);
+      card.style.gridRow = String(week.rows.get(task));
       const spansPreviousDay = task.startDate < key && index % 7 !== 0;
       const spansNextDay = task.dueDate > key && index % 7 !== 6;
       if (task.startDate !== task.dueDate) card.classList.add("is-range");
