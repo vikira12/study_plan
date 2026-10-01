@@ -66,6 +66,7 @@
           </div>
         </div>
         <p class="calendar-tip">날짜를 누르면 일정을 추가합니다. 카드를 드래그하면 기간을 옮기고, 시작일·마감일 카드의 가장자리를 드래그하면 기간을 조정합니다. 카드를 클릭하면 자세히 수정합니다.</p>
+        <p class="holiday-note">토·일요일과 공휴일을 표시합니다. <span id="holiday-status">공휴일 자료 확인 중</span> · 자료: <a href="https://date.nager.at/" target="_blank" rel="noopener noreferrer">Nager.Date</a>, <a href="https://astro.kasi.re.kr/kor/life/post/calendarData?search_year=2026" target="_blank" rel="noopener noreferrer">2026년</a> · <a href="https://astro.kasi.re.kr/kor/life/post/calendarData?search_year=2027" target="_blank" rel="noopener noreferrer">2027년 달력</a>.</p>
         <p id="calendar-drag-status" class="calendar-drag-status" role="status" aria-live="polite"></p>
         </section>
         <aside class="calendar-sidebar" aria-label="일정 요약">
@@ -96,6 +97,16 @@
           <p class="sidebar-kicker">COMING UP</p>
           <h2 id="upcoming-heading">다가오는 일정</h2>
           <ul id="upcoming-list" class="upcoming-list" aria-live="polite"></ul>
+        </section>
+        <section class="insight-card" aria-labelledby="school-heading">
+          <p class="sidebar-kicker">SCHOOL CALENDAR</p>
+          <h2 id="school-heading">대덕소프트웨어마이스터고</h2>
+          <p id="school-status" class="sidebar-caption" role="status">학교 일정 확인 중</p>
+          <ul id="school-event-list" class="school-event-list"></ul>
+          <div class="school-actions">
+            <button id="school-refresh" class="secondary-button" type="button">다시 불러오기</button>
+            <a href="https://dsmhs.djsch.kr/scheduleH/list.do?m=0203&amp;s=dsmhs" target="_blank" rel="noopener noreferrer">학교 원본 보기</a>
+          </div>
         </section>
         </aside>
       </div>

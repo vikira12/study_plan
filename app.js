@@ -22,6 +22,10 @@ const alertSummary = document.querySelector("#alert-summary");
 const notificationButton = document.querySelector("#notification-button");
 const notificationStatus = document.querySelector("#notification-status");
 const calendarGrid = document.querySelector("#calendar-grid");
+const holidayStatus = document.querySelector("#holiday-status");
+const schoolStatus = document.querySelector("#school-status");
+const schoolEventList = document.querySelector("#school-event-list");
+const schoolRefresh = document.querySelector("#school-refresh");
 const calendarDragStatus = document.querySelector("#calendar-drag-status");
 const calendarMonth = document.querySelector("#calendar-month");
 const previousMonthButton = document.querySelector("#previous-month");
@@ -42,6 +46,37 @@ const navigationLinks = [...document.querySelectorAll("[data-nav]")];
 const themeKey = "studyPlannerTheme";
 const calendarSizeKey = "studyPlannerCalendarSize";
 const categoryLabels = { study: "학습", assignment: "과제", review: "복습", exam: "시험", other: "기타" };
+// 2026~2027년 대한민국 공휴일. 월력요항 및 2026년 공휴일 법령 개정 기준.
+// https://astro.kasi.re.kr/kor/life/post/calendarData?search_year=2026
+// https://astro.kasi.re.kr/kor/life/post/calendarData?search_year=2027
+// https://law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1018770105
+const koreanHolidays = {
+  2026: {
+    "01-01": "신정", "02-16": "설날 연휴", "02-17": "설날", "02-18": "설날 연휴",
+    "03-01": "삼일절", "03-02": "대체공휴일", "05-01": "노동절", "05-05": "어린이날",
+    "05-24": "부처님 오신 날", "05-25": "대체공휴일", "06-03": "지방선거",
+    "06-06": "현충일", "07-17": "제헌절", "08-15": "광복절", "08-17": "대체공휴일",
+    "09-24": "추석 연휴", "09-25": "추석", "09-26": "추석 연휴",
+    "10-03": "개천절", "10-05": "대체공휴일", "10-09": "한글날", "12-25": "성탄절",
+  },
+  2027: {
+    "01-01": "신정", "02-06": "설날 연휴", "02-07": "설날", "02-08": "설날 연휴",
+    "02-09": "대체공휴일", "03-01": "삼일절", "05-01": "노동절",
+    "05-03": "대체공휴일", "05-05": "어린이날", "05-13": "부처님 오신 날",
+    "06-06": "현충일", "07-17": "제헌절", "07-19": "대체공휴일",
+    "08-15": "광복절", "08-16": "대체공휴일",
+    "09-14": "추석 연휴", "09-15": "추석", "09-16": "추석 연휴",
+    "10-03": "개천절", "10-04": "대체공휴일", "10-09": "한글날",
+    "10-11": "대체공휴일", "12-25": "성탄절", "12-27": "대체공휴일",
+  },
+};
+const liveHolidays = new Map();
+let schoolEvents = [];
+let calendarDataRequest = 0;
+
+function holidayName(key) {
+  return koreanHolidays[Number(key.slice(0, 4))]?.[key.slice(5)] || liveHolidays.get(key) || null;
+}
 
 function validCategory(value) {
   return Object.prototype.hasOwnProperty.call(categoryLabels, value);
@@ -318,6 +353,95 @@ function renderInsights() {
   }
 }
 
+function renderSchoolEvents() {
+  schoolEventList.replaceChildren();
+  const month = `${viewedMonth.getFullYear()}-${String(viewedMonth.getMonth() + 1).padStart(2, "0")}`;
+  const monthly = schoolEvents.filter((event) => event.startDate.slice(0, 7) <= month && event.dueDate.slice(0, 7) >= month);
+  for (const event of monthly) {
+    const item = document.createElement("li");
+    const date = document.createElement("span");
+    date.textContent = `${formatDate(event.startDate)}${event.dueDate !== event.startDate ? ` ~ ${formatDate(event.dueDate)}` : ""}`;
+    const title = document.createElement("strong");
+    title.textContent = event.title;
+    item.append(date, title);
+    schoolEventList.append(item);
+  }
+  if (!monthly.length && schoolStatus.dataset.loaded === "true") {
+    const empty = document.createElement("li");
+    empty.textContent = "이 달에 공개된 학교 일정이 없습니다.";
+    schoolEventList.append(empty);
+  }
+  if (schoolStatus.dataset.loaded === "true") schoolStatus.textContent = `선택한 달 행사 ${monthly.length}개 · 학교 공개 자료`;
+}
+
+async function requestCalendarData(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    const error = new Error("자료를 불러오지 못했습니다.");
+    error.status = response.status;
+    throw error;
+  }
+  if (!response.headers.get("content-type")?.includes("application/json")) {
+    const error = new Error("일정 API가 없는 페이지입니다.");
+    error.code = "missing-api";
+    throw error;
+  }
+  const data = await response.json();
+  if (!Array.isArray(data.events)) throw new Error("자료 형식이 올바르지 않습니다.");
+  return data.events;
+}
+
+async function loadCalendarData() {
+  const requestId = ++calendarDataRequest;
+  const year = viewedMonth.getFullYear();
+  const month = viewedMonth.getMonth() + 1;
+  schoolEvents = [];
+  schoolStatus.dataset.loaded = "false";
+  schoolStatus.textContent = "학교 일정을 불러오는 중…";
+  renderCalendar();
+  renderSchoolEvents();
+  if (location.protocol === "file:") {
+    holidayStatus.textContent = "실시간 자료는 서버로 열 때 표시됩니다(2026~2027년은 저장된 공휴일 표시).";
+    schoolStatus.textContent = "학교 일정은 `node server.js`로 실행하면 표시됩니다.";
+    return;
+  }
+
+  const years = [year];
+  if (month === 1) years.push(year - 1);
+  if (month === 12) years.push(year + 1);
+  const schoolResultPromise = requestCalendarData(`/api/school-events?year=${year}&month=${month}`)
+    .then((events) => ({ events }), (error) => ({ error }));
+  const holidayResults = await Promise.allSettled(years.map((item) => requestCalendarData(`/api/holidays?year=${item}`)));
+  const loadedYears = holidayResults.filter((result) => result.status === "fulfilled");
+  for (const result of loadedYears) {
+    for (const entry of result.value) {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(entry.date) && typeof entry.name === "string") liveHolidays.set(entry.date, entry.name);
+    }
+  }
+  if (requestId !== calendarDataRequest) return;
+  holidayStatus.textContent = loadedYears.length
+    ? "공휴일 자료를 갱신했습니다. 임시공휴일은 제공처에 따라 빠질 수 있습니다."
+    : "공휴일 갱신에 실패했습니다. 2026~2027년은 저장된 자료를 표시합니다.";
+  renderCalendar();
+
+  const schoolResult = await schoolResultPromise;
+  if (requestId !== calendarDataRequest) return;
+  if (!schoolResult.error) {
+    schoolEvents = schoolResult.events.filter((entry) => entry.source === "school" && typeof entry.title === "string" &&
+      parseDate(entry.startDate) && parseDate(entry.dueDate) && entry.startDate <= entry.dueDate);
+    schoolStatus.dataset.loaded = "true";
+    renderCalendar();
+    renderSchoolEvents();
+  } else {
+    const error = schoolResult.error;
+    schoolStatus.textContent = error.status === 404 || error.code === "missing-api"
+      ? "이 주소에는 학교 일정 서버가 없습니다. 작업 폴더에서 node server.js를 실행한 뒤 http://127.0.0.1:3000 으로 열어 주세요."
+      : error.status === 502
+        ? "학교 사이트 응답이 없어 일정을 불러오지 못했습니다. 연결을 확인하고 다시 불러오기를 눌러 주세요."
+        : "학교 일정 서버에 연결하지 못했습니다. 서버 실행 상태와 접속 주소를 확인해 주세요.";
+  }
+}
+
 function previewCalendarDrag(drag) {
   for (const cell of calendarGrid.querySelectorAll(".calendar-cell")) {
     const key = cell.dataset.date;
@@ -408,8 +532,9 @@ function renderCalendar() {
   for (let start = 0; start < cellCount; start += 7) {
     const first = dateKey(new Date(year, month, start - firstWeekday + 1));
     const last = dateKey(new Date(year, month, start - firstWeekday + 7));
-    weeks.push(tasks.filter((task) => task.startDate <= last && task.dueDate >= first)
-      .sort((a, b) => Number(a.completed) - Number(b.completed) || a.startDate.localeCompare(b.startDate) || a.id.localeCompare(b.id)));
+    weeks.push([...tasks, ...schoolEvents].filter((task) => task.startDate <= last && task.dueDate >= first)
+      .sort((a, b) => Number(a.source === "school") - Number(b.source === "school") ||
+        Number(a.completed) - Number(b.completed) || a.startDate.localeCompare(b.startDate) || a.id.localeCompare(b.id)));
   }
 
   for (let index = 0; index < cellCount; index += 1) {
@@ -417,22 +542,34 @@ function renderCalendar() {
     const key = dateKey(date);
     const outside = date.getMonth() !== month;
     const isToday = dayNumber(parseDate(key)) === today;
+    const holiday = holidayName(key);
+    const weekday = date.getDay();
     const cell = document.createElement("div");
     const weekTasks = weeks[Math.floor(index / 7)];
     const dailyTasks = weekTasks.filter((task) => task.startDate <= key && task.dueDate >= key);
-    cell.className = `calendar-cell${outside ? " is-outside" : ""}${isToday ? " is-today" : ""}`;
+    cell.className = `calendar-cell${outside ? " is-outside" : ""}${isToday ? " is-today" : ""}${weekday === 0 ? " is-sunday" : weekday === 6 ? " is-saturday" : ""}${holiday ? " is-holiday" : ""}`;
     cell.dataset.date = key;
     cell.setAttribute("role", "gridcell");
-    cell.setAttribute("aria-label", formatDate(key));
+    cell.setAttribute("aria-label", `${formatDate(key)}${holiday ? `, ${holiday}` : weekday === 0 ? ", 일요일" : weekday === 6 ? ", 토요일" : ""}`);
 
     const dateHeader = document.createElement("div");
     dateHeader.className = "calendar-date";
+    const dateMeta = document.createElement("span");
+    dateMeta.className = "calendar-date-meta";
+    if (holiday) {
+      const label = document.createElement("span");
+      label.className = "calendar-holiday-label";
+      label.textContent = holiday;
+      label.title = holiday;
+      dateMeta.append(label);
+    }
     if (dailyTasks.length) {
       const count = document.createElement("span");
       count.className = "calendar-day-count";
       count.textContent = `${dailyTasks.length}개`;
-      dateHeader.append(count);
+      dateMeta.append(count);
     }
+    dateHeader.append(dateMeta);
     const dayLabel = date.getDate() === 1 ? `${date.getMonth() + 1}월 ${date.getDate()}일` : String(date.getDate());
     if (dayNumber(parseDate(key)) >= today) {
       const addButton = document.createElement("button");
@@ -454,6 +591,29 @@ function renderCalendar() {
     const events = document.createElement("div");
     events.className = "calendar-events";
     for (const task of dailyTasks) {
+      const isSchool = task.source === "school";
+      if (isSchool) {
+        const card = document.createElement("a");
+        card.className = "calendar-event is-school";
+        card.style.gridRow = String(weekTasks.indexOf(task) + 1);
+        card.href = "https://dsmhs.djsch.kr/scheduleH/list.do?m=0203&s=dsmhs";
+        card.target = "_blank";
+        card.rel = "noopener noreferrer";
+        card.setAttribute("aria-label", `학교 일정 ${task.title}, ${formatDate(task.startDate)}부터 ${formatDate(task.dueDate)}까지. 학교 원본 보기`);
+        const continuesBefore = task.startDate < key && index % 7 !== 0;
+        const continuesAfter = task.dueDate > key && index % 7 !== 6;
+        if (task.startDate !== task.dueDate) card.classList.add("is-range");
+        if (continuesBefore) card.classList.add("continues-before");
+        if (continuesAfter) card.classList.add("continues-after");
+        if (!continuesBefore) {
+          const title = document.createElement("span");
+          title.className = "calendar-event-title";
+          title.textContent = `학교 · ${task.title}`;
+          card.append(title);
+        }
+        events.append(card);
+        continue;
+      }
       const state = deadlineState(task);
       const card = document.createElement("button");
       card.type = "button";
@@ -597,6 +757,7 @@ function notifyDueTasks() {
 function render() {
   renderCalendar();
   renderInsights();
+  renderSchoolEvents();
   renderAlerts();
   renderTasks();
   updateNotificationStatus();
@@ -750,20 +911,21 @@ statusFilter.addEventListener("change", renderTasks);
 searchInput.addEventListener("input", renderTasks);
 previousMonthButton.addEventListener("click", () => {
   viewedMonth = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() - 1, 1);
-  renderCalendar();
+  loadCalendarData();
   renderInsights();
 });
 nextMonthButton.addEventListener("click", () => {
   viewedMonth = new Date(viewedMonth.getFullYear(), viewedMonth.getMonth() + 1, 1);
-  renderCalendar();
+  loadCalendarData();
   renderInsights();
 });
 todayButton.addEventListener("click", () => {
   const now = new Date();
   viewedMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  renderCalendar();
+  loadCalendarData();
   renderInsights();
 });
+schoolRefresh.addEventListener("click", loadCalendarData);
 notificationButton.addEventListener("click", async () => {
   if (!("Notification" in window) || !window.isSecureContext) return;
   try {
@@ -788,3 +950,4 @@ applyCalendarSize(["compact", "normal", "large"].includes(preferredSize) ? prefe
 dueInput.min = dateKey(new Date());
 applyRoute();
 render();
+loadCalendarData();

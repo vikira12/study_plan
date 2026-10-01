@@ -69,6 +69,12 @@ h1 span { margin-left: 4px; color: #89929d; font-size: 0.68em; font-weight: 500;
 .upcoming-item { display: grid; gap: 4px; padding: 9px 10px; border-left: 3px solid var(--category-accent); border-radius: 7px; background: var(--category-bg); }
 .upcoming-item strong { overflow: hidden; color: var(--category-ink); font-size: 0.82rem; text-overflow: ellipsis; white-space: nowrap; }
 .upcoming-item span, .upcoming-empty { color: #66778b; font-size: 0.73rem; line-height: 1.4; }
+.school-event-list { display: grid; gap: 8px; max-height: 260px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.school-event-list li { display: grid; gap: 3px; padding: 8px 10px; border-left: 3px solid #1699a5; border-radius: 6px; background: #e5f6f7; }
+.school-event-list span { color: #426a75; font-size: 0.72rem; }
+.school-event-list strong { font-size: 0.8rem; overflow-wrap: anywhere; }
+.school-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.school-actions a { color: #3268bb; font-size: 0.75rem; }
 .category-study { --category-accent: #4e6ef2; --category-bg: #cfdbff; --category-ink: #203d9b; }
 .category-assignment { --category-accent: #9362db; --category-bg: #e3d2fa; --category-ink: #593092; }
 .category-review { --category-accent: #31aa78; --category-bg: #c7efd9; --category-ink: #155d42; }
@@ -98,20 +104,32 @@ h1 span { margin-left: 4px; color: #89929d; font-size: 0.68em; font-weight: 500;
 .calendar-inner { min-width: 770px; }
 .calendar-weekdays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .calendar-weekdays span { padding: 9px 0; color: #9aa1aa; font-size: 0.75rem; text-align: center; }
+.calendar-weekdays span:first-child { color: #c95769; }
+.calendar-weekdays span:last-child { color: #5377cc; }
 .calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: var(--calendar-row-height); border-top: 1px solid #dfe3e8; background: #dfe3e8; }
 .calendar-cell { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 6px; background: #fff; box-shadow: inset -1px 0 #dfe3e8, inset 0 -1px #dfe3e8; overflow: hidden; }
 .calendar-cell.is-outside { background: #f8f8f7; }
 .calendar-cell.is-today { background: #f0f4ff; }
+.calendar-cell.is-sunday { background: #fff5f6; }
+.calendar-cell.is-saturday { background: #f3f6ff; }
+.calendar-cell.is-holiday { background: #fff0f2; }
+.calendar-cell.is-today.is-holiday { background: #fbe9f1; }
 .calendar-cell.is-drag-preview { background: #e8eeff; box-shadow: inset 0 0 0 2px #8297ef; }
 .calendar-date { display: flex; justify-content: space-between; align-items: center; height: 23px; margin-bottom: 5px; color: #454a50; font-size: 0.81rem; }
 .calendar-date > :last-child { margin-left: auto; }
+.calendar-date > button, .calendar-date > span:last-child { flex: none; white-space: nowrap; }
+.calendar-date-meta { display: flex; align-items: center; gap: 3px; min-width: 0; overflow: hidden; }
+.calendar-holiday-label { overflow: hidden; color: #be4357; font-size: 0.67rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .calendar-day-count { color: #6577a2; font-size: 0.67rem; font-weight: 700; }
 .is-outside .calendar-date { color: #a9afb5; }
+.is-sunday .calendar-date, .is-holiday .calendar-date { color: #b64156; }
+.is-saturday:not(.is-holiday) .calendar-date { color: #4668b5; }
 .calendar-date button { padding: 2px 4px; border: 0; border-radius: 4px; background: transparent; color: inherit; }
 .calendar-date button:hover { background: #e8edea; }
 .is-today .calendar-date button { border-radius: 6px; background: #dce5ff; color: #345bd1; font-weight: 700; }
 .calendar-events { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: 42px; align-content: start; gap: 4px; min-height: 0; margin: 0 -6px; padding: 0 6px; overflow-x: hidden; overflow-y: auto; }
 .calendar-event { position: relative; display: block; min-width: 0; height: 42px; padding: 4px 7px; border: 1px solid var(--category-accent); border-left-width: 3px; border-radius: 6px; background: var(--category-bg); color: var(--category-ink); text-align: left; cursor: grab; user-select: none; }
+.calendar-event.is-school { --category-accent: #1699a5; --category-bg: #c8eef1; --category-ink: #0b5c65; cursor: pointer; text-decoration: none; }
 .calendar-event:hover { filter: brightness(0.97); }
 .calendar-event:active { cursor: grabbing; }
 .calendar-event.is-range { display: flex; align-items: center; }
@@ -127,6 +145,8 @@ h1 span { margin-left: 4px; color: #89929d; font-size: 0.68em; font-weight: 500;
 .calendar-event.is-complete .calendar-event-title { color: #9099a2; text-decoration: line-through; }
 .calendar-event.is-complete .calendar-event-badge { background: #e2f0e3; color: #40784a; }
 .calendar-tip { margin: 0; padding: 11px 20px; border-top: 1px solid #edf0f2; color: #8b949e; font-size: 0.78rem; }
+.holiday-note { margin: 0; padding: 0 20px 11px; color: #79879b; font-size: 0.73rem; line-height: 1.5; }
+.holiday-note a { color: #4668b5; }
 .calendar-drag-status { margin: 0; padding: 0 20px 12px; color: #365dd0; font-size: 0.82rem; font-weight: 650; }
 .calendar-drag-status:empty { display: none; }
 
@@ -271,24 +291,40 @@ h1 span { margin-left: 4px; color: #89929d; font-size: 0.68em; font-weight: 500;
 :root[data-theme="dark"] .category-review { --category-bg: #27684e; --category-ink: #d5f9e5; }
 :root[data-theme="dark"] .category-exam { --category-bg: #844451; --category-ink: #ffe1e5; }
 :root[data-theme="dark"] .category-other { --category-bg: #735724; --category-ink: #ffedc6; }
+:root[data-theme="dark"] .school-event-list li { background: #21494f; color: #d9f5f6; }
+:root[data-theme="dark"] .school-event-list span { color: #a6d9de; }
+:root[data-theme="dark"] .school-actions a { color: #a8c0ff; }
 :root[data-theme="dark"] .calendar-grid { background: #364554; border-color: #364554; }
 :root[data-theme="dark"] .calendar-cell { box-shadow: inset -1px 0 #364554, inset 0 -1px #364554; }
 :root[data-theme="dark"] .calendar-weekdays span,
 :root[data-theme="dark"] .calendar-kicker,
 :root[data-theme="dark"] .eyebrow { color: #9aaaba; }
+:root[data-theme="dark"] .calendar-weekdays span:first-child { color: #f49aaa; }
+:root[data-theme="dark"] .calendar-weekdays span:last-child { color: #9bb8ff; }
 :root[data-theme="dark"] .calendar-cell { background: #19232e; }
 :root[data-theme="dark"] .calendar-cell.is-outside { background: #151d26; }
 :root[data-theme="dark"] .calendar-cell.is-today { background: #202f4d; }
+:root[data-theme="dark"] .calendar-cell.is-sunday { background: #30232e; }
+:root[data-theme="dark"] .calendar-cell.is-saturday { background: #1d2b43; }
+:root[data-theme="dark"] .calendar-cell.is-holiday { background: #3d2633; }
+:root[data-theme="dark"] .calendar-cell.is-today.is-holiday { background: #453047; }
 :root[data-theme="dark"] .calendar-cell.is-drag-preview { background: #2a3b65; box-shadow: inset 0 0 0 2px #8297ef; }
 :root[data-theme="dark"] .calendar-drag-status { color: #a9bdff; }
 :root[data-theme="dark"] .calendar-date { color: #d3dee8; }
 :root[data-theme="dark"] .is-outside .calendar-date { color: #8796a4; }
+:root[data-theme="dark"] .is-sunday .calendar-date,
+:root[data-theme="dark"] .is-holiday .calendar-date,
+:root[data-theme="dark"] .calendar-holiday-label { color: #ff9cad; }
+:root[data-theme="dark"] .is-saturday:not(.is-holiday) .calendar-date { color: #a8c0ff; }
+:root[data-theme="dark"] .holiday-note { color: #a6b5c4; }
+:root[data-theme="dark"] .holiday-note a { color: #a8c0ff; }
 :root[data-theme="dark"] .calendar-date button:hover { background: #2b3b4b; }
 :root[data-theme="dark"] .is-today .calendar-date button { background: #344c7d; color: #e0eaff; }
 :root[data-theme="dark"] .edit-button,
 :root[data-theme="dark"] .delete-button { background: #23303d; border-color: #3c4d5e; color: #e2eaf2; box-shadow: none; }
 :root[data-theme="dark"] .edit-button:hover { background: #2a3a4a; }
 :root[data-theme="dark"] .calendar-event { background: var(--category-bg); border-color: var(--category-accent); color: var(--category-ink); box-shadow: none; }
+:root[data-theme="dark"] .calendar-event.is-school { --category-bg: #22525a; --category-ink: #d6f9fb; }
 :root[data-theme="dark"] .calendar-event:hover { filter: brightness(1.15); }
 :root[data-theme="dark"] .calendar-event-badge { background: #33495d; color: #c7def1; }
 :root[data-theme="dark"] .calendar-event.is-urgent .calendar-event-badge { background: #5b4727; color: #ffe2a8; }
