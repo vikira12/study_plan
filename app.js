@@ -1,11 +1,15 @@
 const storageKey = "studyPlannerTasks";
 const sharedMarkerKey = "studyPlannerLocalSyncInitialized";
 const sharedPendingKey = "studyPlannerLocalPending";
+const sharedBaseKey = "studyPlannerLocalBaseRevision";
+const sharedRecoveryKey = "studyPlannerLocalRecovery";
 const wallpaperMode = new URLSearchParams(location.search).get("wallpaper") === "1";
 const sharedMode = ["127.0.0.1", "localhost", "::1"].includes(location.hostname) && location.protocol === "http:";
 let sharedReady = false;
 let sharedWrite = Promise.resolve();
 let sharedRevision = 0;
+let sharedServerRevision = null;
+let localReadFailed = false;
 const dayMilliseconds = 86_400_000;
 const form = document.querySelector("#task-form");
 const formHeading = document.querySelector("#form-heading");
@@ -266,6 +270,7 @@ function loadTasks() {
     if (!Array.isArray(saved)) throw new Error("일정 데이터 형식 오류");
     return saved.map(normalizeTask);
   } catch {
+    localReadFailed = true;
     storageMessage.hidden = false;
     storageMessage.textContent = "저장된 일정을 읽을 수 없어 빈 목록으로 시작합니다. 새 일정은 다시 저장을 시도합니다.";
     return [];
@@ -274,9 +279,14 @@ function loadTasks() {
 
 function saveTasks(nextTasks) {
   if (wallpaperMode) return false;
-  if (sharedMode) savePreference(sharedPendingKey, "yes");
+  if (sharedMode) {
+    sharedRevision += 1;
+    savePreference(sharedPendingKey, "yes");
+    if (sharedReady) savePreference(sharedBaseKey, sharedServerRevision || "");
+  }
   try {
     localStorage.setItem(storageKey, JSON.stringify(nextTasks));
+    localReadFailed = false;
     tasks = nextTasks;
     storageMessage.hidden = true;
     if (sharedMode && sharedReady) queueSharedSave(nextTasks);
@@ -291,26 +301,58 @@ function saveTasks(nextTasks) {
 }
 
 function queueSharedSave(snapshot) {
-  const revision = ++sharedRevision;
+  const revision = sharedRevision;
   savePreference(sharedPendingKey, "yes");
   sharedWrite = sharedWrite.catch(() => {}).then(async () => {
+    if (!sharedReady) throw new Error("일정 동기화가 중단되었습니다.");
     const response = await fetch("/api/tasks", {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tasks: snapshot }), signal: AbortSignal.timeout(5000),
+      body: JSON.stringify({ tasks: snapshot, expectedRevision: sharedServerRevision }), signal: AbortSignal.timeout(5000),
     });
+    if (response.status === 409) {
+      sharedReady = false;
+      throw new Error("다른 창에서 일정이 변경되었습니다.");
+    }
     if (!response.ok) throw new Error("로컬 일정 저장 실패");
+    const result = await response.json();
+    sharedServerRevision = result.revision;
+    savePreference(sharedBaseKey, sharedServerRevision || "");
     if (revision === sharedRevision) {
       savePreference(sharedPendingKey, "no");
       storageMessage.hidden = true;
     }
   }).catch(() => {
     storageMessage.hidden = false;
-    storageMessage.textContent = "로컬 저장소에 동기화하지 못했습니다. 서버 실행 상태를 확인하고 새로고침해 주세요.";
+    storageMessage.textContent = "로컬 저장소에 동기화하지 못했습니다. 개인 일정을 내보내 백업한 뒤 서버 상태를 확인하고 새로고침해 주세요.";
   });
+}
+
+function chooseSharedTasks(remote, local, options) {
+  // 빈 캐시·손상된 캐시·오래된 미전송 값은 서버의 기존 일정을 덮어쓰지 않는다.
+  if (options.readFailed) return { tasks: remote, write: false, recovery: local.length > 0 };
+  if (!options.initialized) return { tasks: local, write: local.length > 0, recovery: false };
+  if (options.changedDuringLoad) {
+    const baseline = options.localAtLoad;
+    const deletedIds = new Set(baseline.filter((task) => !local.some((item) => item.id === task.id)).map((task) => task.id));
+    const changed = local.filter((task) => JSON.stringify(task) !== JSON.stringify(baseline.find((item) => item.id === task.id)));
+    const merged = remote.filter((task) => !deletedIds.has(task.id)).map((task) => changed.find((item) => item.id === task.id) || task);
+    return { tasks: [...local.filter((task) => !remote.some((item) => item.id === task.id)), ...merged], write: true, recovery: false };
+  }
+  if (options.pending) {
+    if (options.baseMatches && (local.length > 0 || options.changedDuringLoad)) {
+      return { tasks: local, write: true, recovery: false };
+    }
+    return { tasks: remote, write: false, recovery: true };
+  }
+  const merged = options.firstSync
+    ? [...remote, ...local.filter((task) => !remote.some((item) => item.id === task.id))] : remote;
+  return { tasks: merged, write: merged.length > remote.length, recovery: false };
 }
 
 async function loadSharedTasks() {
   if (!sharedMode) return;
+  const revisionAtLoad = sharedRevision;
+  const localAtLoad = tasks;
   try {
     const response = await fetch("/api/tasks", { cache: "no-store", signal: AbortSignal.timeout(5000) });
     if (!response.ok) throw new Error("로컬 서버 연결 실패");
@@ -323,17 +365,34 @@ async function loadSharedTasks() {
       render();
       return;
     }
-    const firstSync = readPreference(sharedMarkerKey) !== "yes";
-    const pending = readPreference(sharedPendingKey) === "yes";
-    const merged = pending || !data.initialized ? tasks : firstSync
-      ? [...remote, ...tasks.filter((task) => !remote.some((item) => item.id === task.id))] : remote;
+    if (!Object.prototype.hasOwnProperty.call(data, "revision")) {
+      throw Object.assign(new Error("서버 버전 확인 실패"), { userMessage: "개인 일정 보호를 위해 저장을 중단했습니다. 서버를 최신 버전으로 다시 실행해 주세요. 브라우저의 일정은 내보내기로 백업할 수 있습니다." });
+    }
+    const changedDuringLoad = sharedRevision !== revisionAtLoad;
+    const decision = chooseSharedTasks(remote, tasks, {
+      initialized: data.initialized,
+      firstSync: readPreference(sharedMarkerKey) !== "yes",
+      pending: readPreference(sharedPendingKey) === "yes",
+      baseMatches: changedDuringLoad || readPreference(sharedBaseKey) === data.revision,
+      changedDuringLoad, localAtLoad, readFailed: localReadFailed,
+    });
+    if (decision.recovery) savePreference(sharedRecoveryKey, JSON.stringify(tasks));
+    sharedServerRevision = data.revision;
     sharedReady = true;
     savePreference(sharedMarkerKey, "yes");
-    saveTasks(merged);
+    // 불러오기 자체는 PUT하지 않는다. 캐시 갱신은 변경/삭제와 분리한다.
+    tasks = decision.tasks;
+    savePreference(storageKey, JSON.stringify(tasks));
+    savePreference(sharedBaseKey, sharedServerRevision || "");
+    savePreference(sharedPendingKey, decision.write ? "yes" : "no");
+    localReadFailed = false;
+    storageMessage.hidden = !decision.recovery;
+    if (decision.recovery) storageMessage.textContent = "서버의 기존 일정을 보호했습니다. 미전송 브라우저 목록은 studyPlannerLocalRecovery에 보관했습니다. 필요한 경우 가져오기로 복구해 주세요.";
+    if (decision.write) queueSharedSave(tasks);
     render();
-  } catch {
+  } catch (error) {
     storageMessage.hidden = false;
-    storageMessage.textContent = "로컬 서버에 연결하지 못했습니다. 개인 일정은 이 브라우저에서만 임시로 보입니다.";
+    storageMessage.textContent = error.userMessage || "로컬 서버에 연결하지 못했습니다. 개인 일정은 이 브라우저에서만 임시로 보입니다.";
   }
 }
 
@@ -920,6 +979,7 @@ function updateNotificationStatus() {
 
 function notifyDueTasks() {
   if (wallpaperMode) return;
+  if (sharedMode && !sharedReady) return;
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   for (const task of tasks) {
     if (deadlineState(task).kind !== "urgent") continue;

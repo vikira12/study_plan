@@ -2,6 +2,7 @@
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { holidaysForYear, schoolEventsForMonth, mergeSchoolEvents } = require("../server");
+const { buildMealSnapshot } = require("./build-meals");
 
 const root = path.resolve(__dirname, "..");
 const output = path.join(root, "dist");
@@ -49,13 +50,26 @@ async function build() {
   }
 
   const calendar = { years, holidaysUpdatedAt, schoolUpdatedAt, holidays, schoolEvents };
+  let previousMeals = null;
+  try { previousMeals = JSON.parse(await fs.readFile(path.join(root, "data/meals.json"), "utf8")); } catch { /* 첫 배포 */ }
+  const meals = await buildMealSnapshot(previousMeals);
   await fs.mkdir(path.join(output, "data"), { recursive: true });
-  await Promise.all(["index.html", "style.css", "app.js", "wallpaper-widget.js", "presentation.html"].map((file) =>
+  await Promise.all(["index.html", "style.css", "app.js", "school-meals.js", "wallpaper-widget.js"].map((file) =>
     fs.copyFile(path.join(root, file), path.join(output, file))));
+  // 발표 자료가 삭제된 작업 폴더에서도 앱과 급식표는 배포할 수 있다.
+  try {
+    await fs.copyFile(path.join(root, "presentation.html"), path.join(output, "presentation.html"));
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    await fs.rm(path.join(output, "presentation.html"), { force: true });
+    console.warn("발표 자료가 없어 앱만 배포합니다.");
+  }
   await fs.writeFile(path.join(output, "data", "calendar.json"), `${JSON.stringify(calendar)}\n`);
+  await fs.writeFile(path.join(output, "data", "meals.json"), `${JSON.stringify(meals)}\n`);
   if (process.argv.includes("--snapshot")) {
     await fs.mkdir(path.dirname(snapshotPath), { recursive: true });
     await fs.writeFile(snapshotPath, `${JSON.stringify(calendar)}\n`);
+    await fs.writeFile(path.join(root, "data", "meals.json"), `${JSON.stringify(meals)}\n`);
   }
   console.log(`배포 자료: 공휴일 ${holidays.length}개, 학교 일정 ${schoolEvents.length}개 (${years.join("~")})`);
 }

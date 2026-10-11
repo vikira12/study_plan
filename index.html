@@ -15,6 +15,7 @@
     </script>
     <link rel="stylesheet" href="style.css" />
     <script src="app.js" defer></script>
+    <script src="school-meals.js" defer></script>
     <script src="wallpaper-widget.js" defer></script>
   </head>
   <body>
@@ -59,6 +60,14 @@
             </div>
           </div>
         </div>
+        <section id="wallpaper-meals" class="wallpaper-meals" aria-labelledby="wallpaper-meals-heading">
+          <div class="wallpaper-meals-heading">
+            <h2 id="wallpaper-meals-heading">오늘의 급식</h2>
+            <p id="wallpaper-meal-day"></p>
+          </div>
+          <p id="wallpaper-meal-status" role="status" aria-live="polite">오늘 급식표 확인 중…</p>
+          <div id="wallpaper-meal-list" class="meal-list"></div>
+        </section>
         <div class="calendar-scroll">
           <div class="calendar-inner">
             <div class="calendar-weekdays" aria-hidden="true">
@@ -72,6 +81,25 @@
         <p id="calendar-drag-status" class="calendar-drag-status" role="status" aria-live="polite"></p>
         </section>
         <aside class="calendar-sidebar" aria-label="일정 요약">
+        <section id="school-meals" class="insight-card meals-panel" aria-labelledby="meals-heading">
+          <p class="sidebar-kicker">SCHOOL MEALS</p>
+          <h2 id="meals-heading">학교 급식표</h2>
+          <p class="sidebar-caption meals-school">대덕소프트웨어마이스터고</p>
+          <div class="meal-controls">
+            <button id="meal-previous" class="icon-button" type="button" aria-label="하루 전 급식">‹</button>
+            <label class="meal-date-label">급식 날짜<input id="meal-date" type="date" min="2020-01-01" max="2100-12-31" /></label>
+            <button id="meal-next" class="icon-button" type="button" aria-label="하루 뒤 급식">›</button>
+          </div>
+          <p id="meal-day-label" class="sidebar-caption"></p>
+          <p id="meal-status" class="sidebar-caption" role="status" aria-live="polite">급식표 확인 중…</p>
+          <div id="meal-list" class="meal-list"></div>
+          <p class="meal-note">메뉴 괄호 속 번호는 학교에서 제공한 알레르기 표시입니다. 변경 사항은 원본을 확인하세요.</p>
+          <div class="school-actions meal-actions">
+            <button id="meal-today" class="secondary-button" type="button">오늘</button>
+            <button id="meal-refresh" class="secondary-button" type="button">다시 조회</button>
+            <a href="https://dsmhs.djsch.kr/sFoodList.do?m=020502&amp;s=dsmhs" target="_blank" rel="noopener noreferrer">학교 식단 원본</a>
+          </div>
+        </section>
         <section class="insight-card" aria-labelledby="month-summary-heading">
           <p class="sidebar-kicker">AT A GLANCE</p>
           <h2 id="month-summary-heading">선택한 달 한눈에</h2>

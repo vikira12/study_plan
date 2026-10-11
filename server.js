@@ -3,10 +3,12 @@ const http = require("node:http");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const os = require("node:os");
+const { createHash } = require("node:crypto");
 
 const host = process.env.HOST || "127.0.0.1";
 const port = Number(process.env.PORT) || 3000;
 const root = __dirname;
+const instance = createHash("sha256").update(root.toLowerCase()).digest("hex");
 const taskStorePath = process.env.STUDY_PLANNER_DATA_FILE || path.join(
   process.env.LOCALAPPDATA || path.join(os.homedir(), ".local", "share"), "StudyPlanner", "tasks.json");
 let taskWrites = Promise.resolve();
@@ -18,10 +20,13 @@ const cache = new Map();
 const files = new Map([
   ["/", ["index.html", "text/html; charset=utf-8"]],
   ["/index.html", ["index.html", "text/html; charset=utf-8"]],
+  ["/setup.html", ["setup.html", "text/html; charset=utf-8"]],
   ["/style.css", ["style.css", "text/css; charset=utf-8"]],
   ["/app.js", ["app.js", "text/javascript; charset=utf-8"]],
   ["/wallpaper.html", ["wallpaper.html", "text/html; charset=utf-8"]],
   ["/wallpaper-widget.js", ["wallpaper-widget.js", "text/javascript; charset=utf-8"]],
+  ["/school-meals.js", ["school-meals.js", "text/javascript; charset=utf-8"]],
+  ["/data/meals.json", ["data/meals.json", "application/json; charset=utf-8"]],
   ["/data/calendar.json", ["data/calendar.json", "application/json; charset=utf-8"]],
   ["/presentation.html", ["presentation.html", "text/html; charset=utf-8"]],
 ]);
@@ -66,21 +71,35 @@ function validDate(value) {
 
 async function readTaskStore() {
   try {
-    const data = JSON.parse(await fs.readFile(taskStorePath, "utf8"));
+    const raw = await fs.readFile(taskStorePath, "utf8");
+    const data = JSON.parse(raw);
     if (!Array.isArray(data.tasks) || !data.tasks.every(validTask) || new Set(data.tasks.map((task) => task.id)).size !== data.tasks.length) throw new Error("개인 일정 파일 형식 오류");
-    return { initialized: true, tasks: data.tasks };
+    return { initialized: true, tasks: data.tasks, revision: createHash("sha256").update(raw).digest("hex") };
   } catch (error) {
-    if (error.code === "ENOENT") return { initialized: false, tasks: [] };
+    if (error.code === "ENOENT") return { initialized: false, tasks: [], revision: null };
     throw error;
   }
 }
 
-async function writeTaskStore(tasks) {
+async function writeTaskStore(tasks, expectedRevision) {
   await fs.mkdir(path.dirname(taskStorePath), { recursive: true });
+  const current = await readTaskStore();
+  if (expectedRevision !== undefined && expectedRevision !== current.revision) {
+    throw Object.assign(new Error("다른 창에서 일정이 변경되었습니다. 새로고침 후 다시 시도하세요."), { status: 409 });
+  }
+  if (current.initialized) {
+    const backupDirectory = path.join(path.dirname(taskStorePath), "backups");
+    await fs.mkdir(backupDirectory, { recursive: true });
+    const backupName = `tasks-${Date.now()}-${current.revision}.json`;
+    await fs.copyFile(taskStorePath, path.join(backupDirectory, backupName));
+    const backups = (await fs.readdir(backupDirectory)).filter((name) => /^tasks-\d+-[a-f0-9]{64}\.json$/.test(name)).sort().reverse();
+    for (const name of backups.slice(10)) await fs.unlink(path.join(backupDirectory, name));
+  }
   const temporary = `${taskStorePath}.${process.pid}.tmp`;
   try {
     await fs.writeFile(temporary, JSON.stringify({ tasks, updatedAt: new Date().toISOString() }), "utf8");
     await fs.rename(temporary, taskStorePath);
+    return (await readTaskStore()).revision;
   } catch (error) {
     await fs.rm(temporary, { force: true }).catch(() => {});
     throw error;
@@ -172,6 +191,63 @@ function decodeHtml(value) {
     }
     return { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" }[entity.toLowerCase()] || match;
   });
+}
+
+const mealSource = "https://open.neis.go.kr/portal/data/service/selectServicePage.do?infId=OPEN17320190722180924242823&infSeq=2";
+const mealRequests = new Map();
+
+function parseSchoolMeals(raw, date) {
+  if (raw?.RESULT?.CODE === "INFO-200") return [];
+  const blocks = raw?.mealServiceDietInfo;
+  const head = blocks?.find((block) => Array.isArray(block.head))?.head;
+  const rows = blocks?.find((block) => Array.isArray(block.row))?.row;
+  const count = head?.find((entry) => "list_total_count" in entry)?.list_total_count;
+  const result = head?.find((entry) => entry.RESULT)?.RESULT;
+  // 인증키 없는 응답은 최대 5건이다. 날짜별 조회로 누락을 방지하고 총 건수도 검사한다.
+  if (result?.CODE !== "INFO-000" || !Array.isArray(rows) || count !== rows.length || rows.length > 3) {
+    throw new Error("급식 자료 형식 오류 또는 일부 메뉴 누락");
+  }
+  const types = { "1": "조식", "2": "중식", "3": "석식" };
+  const seen = new Set();
+  return rows.map((row) => {
+    if (row.ATPT_OFCDC_SC_CODE !== "G10" || row.SD_SCHUL_CODE !== "7430310" ||
+        row.MLSV_YMD !== date.replaceAll("-", "") || !types[row.MMEAL_SC_CODE] ||
+        seen.has(row.MMEAL_SC_CODE) || typeof row.DDISH_NM !== "string") {
+      throw new Error("학교 또는 날짜가 다른 급식 자료");
+    }
+    seen.add(row.MMEAL_SC_CODE);
+    const menu = decodeHtml(row.DDISH_NM.replace(/<br\s*\/?\s*>/gi, "\n"))
+      .split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (!menu.length) throw new Error("급식 메뉴가 비어 있습니다.");
+    return { type: types[row.MMEAL_SC_CODE], menu, calories: typeof row.CAL_INFO === "string" ? row.CAL_INFO.trim() : "" };
+  }).sort((a, b) => Object.values(types).indexOf(a.type) - Object.values(types).indexOf(b.type));
+}
+
+async function schoolMealsForDate(date) {
+  if (!validDate(date) || Number(date.slice(0, 4)) < 2020 || Number(date.slice(0, 4)) > 2100) {
+    throw new Error("급식 날짜가 올바르지 않습니다.");
+  }
+  const key = `meals-${date}`;
+  const stored = cache.get(key);
+  if (stored && Date.now() - stored.time < 30 * 60_000) return { ...stored.value, stale: false };
+  if (mealRequests.has(date)) return mealRequests.get(date);
+  const pending = (async () => {
+    try {
+      const url = new URL("https://open.neis.go.kr/hub/mealServiceDietInfo");
+      url.search = new URLSearchParams({ Type: "json", ATPT_OFCDC_SC_CODE: "G10", SD_SCHUL_CODE: "7430310", MLSV_YMD: date.replaceAll("-", "") }).toString();
+      const meals = parseSchoolMeals(JSON.parse(await fetchText(url, 1)), date);
+      const value = { date, meals, updatedAt: new Date().toISOString(), source: mealSource };
+      cache.set(key, { time: Date.now(), value });
+      return { ...value, stale: false };
+    } catch (error) {
+      if (stored) return { ...stored.value, stale: true };
+      throw error;
+    } finally {
+      mealRequests.delete(date);
+    }
+  })();
+  mealRequests.set(date, pending);
+  return pending;
 }
 
 function parseSchoolPage(html) {
@@ -284,14 +360,18 @@ const server = http.createServer(async (request, response) => {
         return;
       }
       const body = await readRequestJson(request);
+      if (!Object.prototype.hasOwnProperty.call(body || {}, "expectedRevision")) {
+        sendJson(response, 428, { error: "개인 일정 보호를 위한 버전 정보가 없습니다. 웹을 새로고침 후 다시 시도하세요." });
+        return;
+      }
       if (!Array.isArray(body?.tasks) || body.tasks.length > 1000 ||
           !body.tasks.every(validTask) || new Set(body.tasks.map((task) => task.id)).size !== body.tasks.length) {
         sendJson(response, 400, { error: "일정 데이터 형식이 올바르지 않습니다." });
         return;
       }
-      taskWrites = taskWrites.catch(() => {}).then(() => writeTaskStore(body.tasks));
-      await taskWrites;
-      sendJson(response, 200, { saved: true });
+      taskWrites = taskWrites.catch(() => {}).then(() => writeTaskStore(body.tasks, body.expectedRevision));
+      const revision = await taskWrites;
+      sendJson(response, 200, { saved: true, revision });
     } catch (error) {
       console.error(url.pathname, error.message);
       sendJson(response, error.status || 500, { error: error.status ? error.message : "로컬 데이터를 저장하거나 읽지 못했습니다." });
@@ -300,6 +380,24 @@ const server = http.createServer(async (request, response) => {
   }
   if (request.method !== "GET") {
     sendJson(response, 405, { error: "GET 요청만 지원합니다." });
+    return;
+  }
+  if (url.pathname === "/api/health") {
+    sendJson(response, 200, { app: "study-planner", status: "ok", instance });
+    return;
+  }
+  if (url.pathname === "/api/school-meals") {
+    const date = url.searchParams.get("date");
+    if (!validDate(date) || Number(date.slice(0, 4)) < 2020 || Number(date.slice(0, 4)) > 2100) {
+      sendJson(response, 400, { error: "급식 날짜가 올바르지 않습니다." });
+      return;
+    }
+    try {
+      sendJson(response, 200, await schoolMealsForDate(date));
+    } catch (error) {
+      console.error(url.pathname, error.message);
+      sendJson(response, 502, { error: "학교 급식표를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요." });
+    }
     return;
   }
   const year = Number(url.searchParams.get("year"));
@@ -339,4 +437,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { holidaysForYear, schoolEventsForMonth, mergeSchoolEvents };
+module.exports = { holidaysForYear, schoolEventsForMonth, mergeSchoolEvents, schoolMealsForDate, parseSchoolMeals, server };

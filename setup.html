@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>스터디 플래너 | 처음 사용하기</title>
+    <style>
+      :root { color-scheme: light dark; font-family: "Malgun Gothic", system-ui, sans-serif; }
+      body { margin: 0; background: #eff2fb; color: #25314b; line-height: 1.8; }
+      main { max-width: 840px; padding: 40px 20px 70px; margin: auto; }
+      h1 { margin-bottom: 8px; font-size: clamp(26px, 5vw, 38px); }
+      h2 { font-size: 20px; margin-top: 0; }
+      section { background: white; border: 1px solid #dce2f0; border-radius: 18px; padding: 24px; margin: 22px 0; }
+      a { color: #4145c7; overflow-wrap: anywhere; }
+      .button { display: inline-block; background: #5256df; color: white; padding: 10px 20px; border-radius: 10px; text-decoration: none; }
+      code { padding: 3px 6px; background: #f1f3f9; border-radius: 5px; overflow-wrap: anywhere; }
+      li + li { margin-top: 10px; }
+      .note { color: #53617b; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #171b2b; color: #e6e9f6; }
+        section { background: #22283b; border-color: #39415a; }
+        a { color: #b2b5ff; } code { background: #30374f; } .note { color: #b9c1d5; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>나만의 학습 달력, 준비 완료</h1>
+      <p class="note">개인 일정 · 대덕소프트웨어마이스터고 학교 일정 · 공휴일 · 급식을 웹과 배경화면에서 함께 확인하세요.</p>
+      <section>
+        <h2>1. 처음 설치하는 분</h2>
+        <ol>
+          <li>받은 ZIP을 우클릭해 <strong>모두 압축 풀기</strong>를 선택하세요. ZIP 내부에서 직접 실행하지 마세요.</li>
+          <li>압축을 푼 <code>StudyPlanner</code> 폴더에서 <strong>설치.cmd</strong>를 실행하세요. Node.js 별도 설치나 관리자 권한은 필요하지 않습니다.</li>
+          <li>설치가 끝나면 바탕화면의 <strong>Study Planner</strong> 바로가기로 실행하세요. 서버는 Windows 로그인 때 자동으로 시작합니다.</li>
+        </ol>
+        <p class="note">프로그램 위치: <code>%LOCALAPPDATA%\Programs\StudyPlanner</code>. Windows 보안 경고가 나오면 출처를 확인하세요. 조직 보안 정책을 우회하거나 백신을 끄지 마세요.</p>
+        <a class="button" href="http://127.0.0.1:3000/">내 달력 열기</a>
+      </section>
+      <section>
+        <h2>2. 배경화면에 달력 띄우기</h2>
+        <ol>
+          <li><a href="https://www.livelywallpaper.net/" target="_blank" rel="noopener noreferrer">Lively Wallpaper 공식 홈페이지</a>에서 Lively를 설치하고 실행하세요. Lively는 이 ZIP에 포함하지 않습니다.</li>
+          <li>Lively에서 <strong>배경화면 추가 → URL</strong>에 아래 주소를 붙여 넣고 적용하세요.<br /><code>http://127.0.0.1:3000/wallpaper.html</code></li>
+          <li>Lively 설정에서 Windows 시작 시 실행을 켜세요. 로그인 직후 연결 실패 화면이면 Study Planner를 실행한 뒤 배경화면을 다시 불러오세요.</li>
+          <li>달력 상단을 마우스로 끌어 이동하고, 테두리·모서리를 끌어 크기를 바꿉니다. 배경화면 마우스 입력이 안 되면 Lively의 상호작용 설정을 확인하세요.</li>
+        </ol>
+        <p class="note">배경화면은 읽기 전용이며 개인 일정은 약 15초마다 반영됩니다. 오른쪽 급식은 한국 시간 기준 오늘 식단입니다.</p>
+        <a href="http://127.0.0.1:3000/wallpaper.html" target="_blank" rel="noopener noreferrer">배경화면 달력 미리보기</a>
+      </section>
+      <section>
+        <h2>3. 일정 작성과 이전</h2>
+        <p>웹의 <strong>일정 입력</strong>에서 제목과 시작·마감 날짜를 지정하세요. 달력에서 드래그로 기간을 바꾸고, 우클릭으로 완료 여부를 바꿀 수 있습니다. 시간 단위 일정은 사용하지 않습니다.</p>
+        <p>기존 GitHub Pages 일정은 그 주소의 <strong>내 일정 → 개인 일정 내보내기</strong>로 다운로드한 뒤, 이 PC의 <strong>내 일정 → 개인 일정 가져오기</strong>로 옮기세요. 이후 수정은 <code>http://127.0.0.1:3000/</code>에서 해야 배경화면에도 반영됩니다.</p>
+        <p class="note">각자의 일정은 각자의 PC에 저장합니다. 사용자 계정·PC·Pages 사이의 자동 동기화는 지원하지 않습니다.</p>
+      </section>
+      <section>
+        <h2>4. 백업 · 업데이트 · 제거</h2>
+        <ul>
+          <li>정기적으로 <strong>개인 일정 내보내기</strong>를 사용하세요. 개인 파일은 <code>%LOCALAPPDATA%\StudyPlanner\tasks.json</code>이고, 변경 전 최근 10개 백업은 같은 폴더의 <code>backups</code>에 보관됩니다.</li>
+          <li>업데이트는 새 ZIP의 <strong>설치.cmd</strong>를 실행합니다. 설치 파일만 교체하고 개인 일정과 달력 배치는 유지합니다.</li>
+          <li>제거하려면 설치 폴더의 <strong>제거.cmd</strong>를 실행하세요. 자동 시작과 바로가기만 해제하고 서버를 종료합니다. 프로그램 폴더는 안내에 따라 직접 지우고, Lively 배경화면도 따로 해제하세요. 개인 데이터는 남습니다.</li>
+          <li>실행 실패 시 <code>%LOCALAPPDATA%\StudyPlanner\startup.log</code>와 <code>server-error.log</code>를 확인하세요. 다른 앱이 3000 포트를 쓰면 그 앱을 자동 종료하지 않습니다.</li>
+        </ul>
+        <p class="note">인터넷 연결은 학교 일정·급식 갱신에 필요합니다. 공개 자료는 원본과 대조하세요. 앱이 닫혀 있는 동안 마감 알림을 보내는 기능은 지원하지 않습니다.</p>
+      </section>
+    </main>
+  </body>
+</html>

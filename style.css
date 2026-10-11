@@ -22,12 +22,13 @@ body { margin: 0; }
 :root[data-wallpaper="true"] .calendar-drag-status,
 :root[data-wallpaper="true"] .calendar-sidebar,
 :root[data-wallpaper="true"] .calendar-tip,
+:root[data-wallpaper="true"] .holiday-note,
 :root[data-wallpaper="true"] .alert-panel,
 :root[data-wallpaper="true"] [data-view="add"],
 :root[data-wallpaper="true"] [data-view="tasks"] { display: none !important; }
 :root[data-wallpaper="true"] .calendar-layout { display: block; height: 100%; margin: 0; }
-:root[data-wallpaper="true"] .calendar-section { height: 100%; display: flex; flex-direction: column; box-shadow: 0 12px 45px rgb(30 39 50 / 14%); }
-:root[data-wallpaper="true"] .calendar-scroll { flex: 1; min-height: 0; overflow: hidden; }
+:root[data-wallpaper="true"] .calendar-section { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) clamp(180px, 30%, 280px); grid-template-rows: auto minmax(0, 1fr); box-shadow: 0 12px 45px rgb(30 39 50 / 14%); }
+:root[data-wallpaper="true"] .calendar-scroll { grid-column: 1; grid-row: 2; min-width: 0; min-height: 0; overflow: hidden; }
 :root[data-wallpaper="true"] .calendar-inner { min-width: 0; height: 100%; display: flex; flex-direction: column; }
 :root[data-wallpaper="true"] .calendar-grid { flex: 1; min-height: 0; grid-auto-rows: minmax(0, 1fr); }
 :root[data-wallpaper="true"] .calendar-cell { padding: 3px; }
@@ -38,10 +39,9 @@ body { margin: 0; }
 :root[data-wallpaper="true"] .calendar-event-badges { flex: none; margin-left: auto; }
 :root[data-wallpaper="true"] .calendar-category-badge,
 :root[data-wallpaper="true"] .calendar-event-badge { margin-top: 0; font-size: 0.6rem; }
-:root[data-wallpaper="true"] .calendar-toolbar { flex: none; flex-direction: row; padding: 12px 16px; cursor: grab; touch-action: none; user-select: none; gap: 8px; }
+:root[data-wallpaper="true"] .calendar-toolbar { grid-column: 1 / -1; grid-row: 1; flex-direction: row; padding: 12px 16px; cursor: grab; touch-action: none; user-select: none; gap: 8px; }
 :root[data-wallpaper="true"] .calendar-toolbar h2 { font-size: 1rem; }
 :root[data-wallpaper="true"] .calendar-weekdays { flex: none; }
-:root[data-wallpaper="true"] .holiday-note { flex: none; margin: 6px 12px; padding: 0; font-size: 0.65rem; }
 :root[data-wallpaper="true"] .notice { position: fixed; bottom: 8px; left: 24px; right: 24px; z-index: 5; }
 .wallpaper-widget-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 5px; max-width: 55%; }
 .wallpaper-widget-controls button { padding: 5px 7px; border: 1px solid #a5b2c5; border-radius: 6px; color: inherit; background: transparent; font-size: 0.7rem; white-space: nowrap; }
@@ -128,6 +128,38 @@ h1 span { margin-left: 4px; color: #89929d; font-size: 0.68em; font-weight: 500;
 .school-event-list strong { font-size: 0.8rem; overflow-wrap: anywhere; }
 .school-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 .school-actions a { color: #3268bb; font-size: 0.75rem; }
+.meal-controls { display: flex; align-items: flex-end; gap: 5px; margin-bottom: 10px; }
+.meal-controls .icon-button { flex: none; }
+.meal-date-label { display: grid; gap: 4px; min-width: 0; flex: 1; font-size: 0.7rem; color: #526074; }
+.meal-date-label input { width: 100%; min-width: 0; padding: 6px 3px; border: 1px solid #d5dde5; border-radius: 7px; background: #fff; color: #30343b; font-size: 0.75rem; }
+.meal-list { display: grid; gap: 8px; }
+.meal-card { min-width: 0; padding: 10px; border-left: 3px solid var(--meal-accent); border-radius: 8px; background: var(--meal-bg); }
+.meal-breakfast { --meal-accent: #d59b2c; --meal-bg: #fff1d9; }
+.meal-lunch { --meal-accent: #30a77a; --meal-bg: #ddf4e9; }
+.meal-dinner { --meal-accent: #8d69d6; --meal-bg: #eee5ff; }
+.meal-card h3 { margin: 0 0 5px; font-size: 0.83rem; }
+.meal-card p { margin: 0; white-space: pre-line; overflow-wrap: anywhere; font-size: 0.76rem; line-height: 1.6; }
+.meal-card small { display: block; margin-top: 6px; font-size: 0.7rem; }
+.meal-note { margin: 10px 0 0; color: #66778b; font-size: 0.68rem; line-height: 1.5; }
+.meal-actions .secondary-button { padding: 6px 9px; font-size: 0.75rem; }
+:root[data-theme="dark"] .meal-date-label, :root[data-theme="dark"] .meal-note { color: #b5c5d4; }
+:root[data-theme="dark"] .meal-date-label input { background: #131c25; border-color: #435569; color: #e2eaf2; }
+:root[data-theme="dark"] .meal-breakfast { --meal-bg: #4a3625; }
+:root[data-theme="dark"] .meal-lunch { --meal-bg: #1f4a3b; }
+:root[data-theme="dark"] .meal-dinner { --meal-bg: #3e315a; }
+.wallpaper-meals { display: none; }
+:root[data-wallpaper="true"] .wallpaper-meals { display: block; grid-column: 2; grid-row: 2; min-width: 0; min-height: 0; padding: 12px; overflow-y: auto; border-left: 1px solid #e0e6f1; background: #f7f9ff; }
+.wallpaper-meals-heading { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.wallpaper-meals-heading h2 { margin: 0; font-size: 0.88rem; }
+#wallpaper-meal-day { margin: 0; color: #66778b; font-size: 0.72rem; }
+#wallpaper-meal-status { margin: 3px 0 6px; color: #66778b; font-size: 0.65rem; }
+.wallpaper-meals .meal-list { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.wallpaper-meals .meal-card { padding: 5px 7px; }
+.wallpaper-meals .meal-card p { font-size: 0.68rem; line-height: 1.4; }
+.wallpaper-meals .meal-card h3 { font-size: 0.73rem; }
+:root[data-wallpaper="true"][data-theme="dark"] .wallpaper-meals { background: #192735; border-color: #364554; }
+:root[data-theme="dark"] #wallpaper-meal-day,
+:root[data-theme="dark"] #wallpaper-meal-status { color: #b5c5d4; }
 .category-study { --category-accent: #4e6ef2; --category-bg: #cfdbff; --category-ink: #203d9b; }
 .category-assignment { --category-accent: #9362db; --category-bg: #e3d2fa; --category-ink: #593092; }
 .category-review { --category-accent: #31aa78; --category-bg: #c7efd9; --category-ink: #155d42; }
